@@ -1,0 +1,32 @@
+{
+  "name": "bot-news-tele",
+  "version": "1.0.0",
+  "description": "Bot Telegram theo dõi Twitter và đăng tin tự động",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node start.js",
+    "start:direct": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "setup": "node setup.js",
+    "pm2:start": "pm2 start src/index.js --name twitter-bot",
+    "pm2:stop": "pm2 stop twitter-bot",
+    "pm2:restart": "pm2 restart twitter-bot",
+    "pm2:logs": "pm2 logs twitter-bot",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": ["telegram", "twitter", "bot", "nodejs", "mongodb"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "node-telegram-bot-api": "^0.61.0",
+    "mongoose": "^7.6.3",
+    "axios": "^1.5.1",
+    "dotenv": "^16.3.1",
+    "node-cron": "^3.0.2",
+    "moment": "^2.29.4",
+    "winston": "^3.10.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+} 
