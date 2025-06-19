@@ -54,51 +54,154 @@ class TelegramService {
       const welcomeMessage = `
 🤖 *Chào mừng bạn đến với Bot Twitter News!*
 
-Bot này sẽ theo dõi các tài khoản Twitter và thông báo khi có tweet mới.
+Bot này sẽ theo dõi các tài khoản Twitter và thông báo khi có tweet mới với đầy đủ thông tin profile, media và thống kê.
 
-*Các lệnh công khai:*
-/list - Xem danh sách tài khoản đang theo dõi
-/status - Xem trạng thái bot
-/help - Xem hướng dẫn
+📋 *LỆNH XEM THÔNG TIN (Tất cả user):*
+• \`/list\` - Danh sách tài khoản theo dõi với badges & stats
+• \`/info username\` - Chi tiết profile + avatar user
+• \`/status\` - Trạng thái bot & thống kê tweets
+• \`/help\` - Hướng dẫn đầy đủ tất cả lệnh
 
-${isAdmin ? `*Các lệnh quản trị (chỉ admin):*
-/add @username - Thêm tài khoản Twitter để theo dõi
-/remove @username - Xóa tài khoản khỏi danh sách theo dõi
-/check - Kiểm tra tweets mới ngay lập tức
-/admin - Xem thông tin quyền truy cập
+${isAdmin ? `🔧 *LỆNH QUẢN TRỊ (Chỉ Admin):*
+• \`/add username\` - Thêm user với full profile từ Twitter
+• \`/remove username\` - Xóa user khỏi danh sách theo dõi  
+• \`/update username\` - Cập nhật profile + stats mới nhất
+• \`/check\` - Force check tweets mới tất cả users
+• \`/admin\` - Quản lý quyền admin & config
 
-*Ví dụ:*
-\`/add elonmusk\`
-\`/remove elonmusk\`
-\`/check\`` : `*Lưu ý:* Bạn chỉ có thể xem thông tin. Các lệnh quản lý chỉ dành cho admin.`}
+📝 *VÍ DỤ SỬ DỤNG:*
+\`/add elonmusk\` - Thêm Elon Musk
+\`/info elonmusk\` - Xem profile chi tiết  
+\`/update elonmusk\` - Cập nhật stats mới
+\`/check\` - Kiểm tra tweets ngay
+
+🔑 *QUYỀN TRUY CẬP:* Admin (Full access)` : `🔍 *QUYỀN TRUY CẬP:* Viewer (Chỉ xem)
+❗ *Lưu ý:* Các lệnh quản lý chỉ dành cho admin`}
+
+⚡ *TỰ ĐỘNG:* Bot kiểm tra tweets mỗi ${process.env.CHECK_INTERVAL_MINUTES || 5} phút
       `;
       
       this.bot.sendMessage(chatId, welcomeMessage, { parse_mode: 'Markdown' });
     });
 
-    // Command /help
+    // Command /help - Hiển thị help khác nhau cho từng đối tượng
     this.bot.onText(/\/help/, (msg) => {
       const chatId = msg.chat.id;
-      const helpMessage = `
-*🔧 Hướng dẫn sử dụng Bot Twitter News*
-
-*Quản lý theo dõi:*
-\`/add username\` - Thêm tài khoản Twitter
-\`/remove username\` - Xóa tài khoản
-\`/list\` - Xem danh sách theo dõi
-
-*Kiểm tra và theo dõi:*
-\`/check\` - Kiểm tra tweets mới ngay
-\`/status\` - Xem trạng thái bot
-
-*Lưu ý:*
-• Username không cần có dấu @
-• Bot sẽ tự động kiểm tra tweets mới mỗi ${process.env.CHECK_INTERVAL_MINUTES || 5} phút
-• Chỉ các tài khoản Twitter public mới có thể theo dõi được
-• Bot sẽ lưu lại tweets để tránh spam trùng lặp
-      `;
+      const userId = msg.from.id;
+      const isAdmin = this.isAuthorized(userId, chatId);
       
-      this.bot.sendMessage(chatId, helpMessage, { parse_mode: 'Markdown' });
+      if (isAdmin) {
+        // Help đầy đủ cho Admin
+        const adminHelpMessage = `
+📚 *HƯỚNG DẪN ADMIN - BOT TWITTER NEWS*
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔑 **QUYỀN TRUY CẬP: ADMIN (Full Access)**
+
+👀 *LỆNH XEM THÔNG TIN:*
+
+📋 \`/list\` - *Danh sách theo dõi*
+
+🔍 \`/info username\` - *Thông tin chi tiết*
+
+📊 \`/status\` - *Trạng thái hệ thống*
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔧 *LỆNH QUẢN TRỊ (Admin Only):*
+
+➕ \`/add username\` - *Thêm user theo dõi*
+
+
+➖ \`/remove username\` - *Xóa user*
+
+
+🔄 \`/update username\` - *Cập nhật profile*
+
+⚡ \`/check\` - *Kiểm tra tweets ngay*
+
+🔐 \`/admin\` - *Quản lý admin*
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📝 *VÍ DỤ ADMIN:*
+
+\`/add elonmusk\`      → Thêm Elon Musk
+\`/info elonmusk\`     → Xem profile chi tiết
+\`/update elonmusk\`   → Cập nhật stats mới
+\`/remove elonmusk\`   → Xóa khỏi theo dõi
+\`/check\`             → Kiểm tra tweets ngay
+\`/admin\`             → Quản lý quyền admin
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+⚙️ *THÔNG TIN QUAN TRỌNG:*
+
+🔄 **Tự động:** Bot check tweets mỗi ${process.env.CHECK_INTERVAL_MINUTES || 5} phút
+📱 **Username:** Không cần dấu @ (elonmusk, không phải @elonmusk)
+🌍 **Hỗ trợ:** Chỉ tài khoản Twitter public
+💾 **Lưu trữ:** Full profile + media + text tweets
+🚫 **Chống spam:** Không gửi lại tweets cũ
+📊 **Thống kê:** Retweets, likes, views, replies
+🔵 **Verification:** Hiển thị blue check & legacy verification
+🖼️ **Media:** Hỗ trợ ảnh, video trong tweets
+
+🆘 *HỖ TRỢ ADMIN:*
+Bạn có full quyền quản lý bot. Liên hệ dev nếu cần thêm tính năng!
+        `;
+        
+        this.bot.sendMessage(chatId, adminHelpMessage, { parse_mode: 'Markdown' });
+      } else {
+        // Help giản lược cho User thường
+        const userHelpMessage = `
+👀 *HƯỚNG DẪN USER - BOT TWITTER NEWS*
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔍 **QUYỀN TRUY CẬP: VIEWER (Chỉ xem)**
+
+*LỆNH BạN CÓ THỂ SỬ DỤNG:*
+
+📋 \`/list\` - *Xem danh sách theo dõi*
+
+🔍 \`/info username\` - *Thông tin chi tiết user*
+
+📊 \`/status\` - *Trạng thái bot*
+
+❓ \`/help\` - *Hướng dẫn này*
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📝 *VÍ DỤ SỬ DỤNG:*
+
+\`/list\`              → Xem tất cả users
+\`/info elonmusk\`     → Chi tiết profile Elon Musk
+\`/status\`            → Xem trạng thái bot
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+⚙️ *LƯU Ý QUAN TRỌNG:*
+
+🔄 **Tự động:** Bot sẽ tự động thông báo tweets mới mỗi ${process.env.CHECK_INTERVAL_MINUTES || 5} phút
+📱 **Username:** Nhập không cần dấu @ (ví dụ: elonmusk)
+🔵 **Verification:** Bot hiển thị blue check & verification badges
+🖼️ **Media:** Hỗ trợ ảnh, video trong tweets
+🚫 **Chống spam:** Không gửi lại tweets cũ
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+❗ *LỆNH QUẢN LÝ:*
+Các lệnh thêm/xóa/cập nhật chỉ dành cho admin.
+Nếu bạn cần thêm tài khoản Twitter, liên hệ admin!
+
+🆘 *HỖ TRỢ:*
+Nếu có thắc mắc hoặc gặp lỗi, liên hệ admin để được hỗ trợ.
+        `;
+        
+        this.bot.sendMessage(chatId, userHelpMessage, { parse_mode: 'Markdown' });
+      }
     });
 
     // Command /add - Chỉ admin
@@ -168,10 +271,23 @@ ${isAdmin ? `*Các lệnh quản trị (chỉ admin):*
 
       let message = `📋 *Danh sách tài khoản đang theo dõi:*\n\n`;
       users.forEach((user, index) => {
-        message += `${index + 1}. ${user.displayName} (@${user.username})\n`;
+        const verificationBadge = user.isBlueVerified ? '🔵' : user.isVerified ? '✅' : '';
+        const followerCount = user.followers ? `👥 ${user.followers.toLocaleString()}` : '';
+        
+        message += `${index + 1}. **${user.displayName}** ${verificationBadge} (@${user.username})\n`;
+        if (followerCount) {
+          message += `   ${followerCount} followers\n`;
+        }
+        if (user.description) {
+          const shortDesc = user.description.length > 50 
+            ? user.description.substring(0, 50) + '...' 
+            : user.description;
+          message += `   📝 ${shortDesc}\n`;
+        }
+        message += `\n`;
       });
       
-      message += `\n*Tổng: ${users.length} tài khoản*`;
+      message += `*Tổng: ${users.length} tài khoản*`;
       
       this.bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
     });
@@ -253,6 +369,101 @@ Thêm \`TELEGRAM_ADMIN_IDS=id1,id2,id3\` vào file .env để cấu hình nhiề
       `;
       
       this.bot.sendMessage(chatId, adminMessage, { parse_mode: 'Markdown' });
+    });
+
+    // Command /update - Cập nhật thông tin profile user (Chỉ admin)
+    this.bot.onText(/\/update (.+)/, async (msg, match) => {
+      const chatId = msg.chat.id;
+      const userId = msg.from.id;
+      const username = match[1].replace('@', '').trim();
+
+      // Kiểm tra quyền admin
+      if (!this.isAuthorized(userId, chatId)) {
+        this.bot.sendMessage(chatId, '🚫 Bạn không có quyền sử dụng lệnh này!');
+        return;
+      }
+
+      if (!username) {
+        this.bot.sendMessage(chatId, '❌ Vui lòng nhập username!\nVí dụ: `/update elonmusk`', { parse_mode: 'Markdown' });
+        return;
+      }
+
+      this.bot.sendMessage(chatId, `⏳ Đang cập nhật thông tin @${username}...`);
+
+      const result = await twitterService.updateUserProfile(username);
+      
+      if (result.success) {
+        this.bot.sendMessage(chatId, `✅ ${result.message}`);
+      } else {
+        this.bot.sendMessage(chatId, `❌ ${result.message}`);
+      }
+    });
+
+    // Command /info - Xem thông tin chi tiết của user
+    this.bot.onText(/\/info (.+)/, async (msg, match) => {
+      const chatId = msg.chat.id;
+      const username = match[1].replace('@', '').trim();
+
+      if (!username) {
+        this.bot.sendMessage(chatId, '❌ Vui lòng nhập username!\nVí dụ: `/info elonmusk`', { parse_mode: 'Markdown' });
+        return;
+      }
+
+      try {
+        const TwitterUser = require('../models/TwitterUser');
+        const user = await TwitterUser.findOne({ username: username.toLowerCase() });
+        
+        if (!user) {
+          this.bot.sendMessage(chatId, `❌ Không tìm thấy user @${username} trong danh sách theo dõi!`);
+          return;
+        }
+
+        const verificationBadge = user.isBlueVerified ? '🔵' : user.isVerified ? '✅' : '⚪';
+        const lastUpdate = user.lastProfileUpdate ? moment(user.lastProfileUpdate).fromNow() : 'Chưa cập nhật';
+        const twitterAge = user.twitterCreatedAt ? moment(user.twitterCreatedAt).fromNow() : 'Không rõ';
+
+        const infoMessage = `
+👤 **Thông tin chi tiết ${user.displayName}** ${verificationBadge}
+
+🔗 **Username:** @${user.username}
+🆔 **Twitter ID:** ${user.userId}
+📝 **Bio:** ${user.description || 'Không có bio'}
+📍 **Vị trí:** ${user.location || 'Không rõ'}
+🌐 **Website:** ${user.url || 'Không có'}
+
+📊 **Thống kê:**
+👥 **Followers:** ${user.followers?.toLocaleString() || 0}
+👤 **Following:** ${user.following?.toLocaleString() || 0}
+📝 **Tweets:** ${user.statusesCount?.toLocaleString() || 0}
+
+⏰ **Thời gian:**
+🐦 **Tham gia Twitter:** ${twitterAge}
+🤖 **Theo dõi từ:** ${moment(user.createdAt).fromNow()}
+🔄 **Cập nhật gần nhất:** ${lastUpdate}
+
+🏷️ **Loại tài khoản:** ${user.type || 'user'}
+🎯 **Tweet cuối:** ${user.lastTweetId || 'Chưa có'}
+        `;
+
+        // Gửi thông tin dạng text
+        await this.bot.sendMessage(chatId, infoMessage, { parse_mode: 'Markdown' });
+
+        // Gửi avatar nếu có
+        if (user.profilePicture) {
+          try {
+            await this.bot.sendPhoto(chatId, user.profilePicture, {
+              caption: `🖼️ Avatar của **${user.displayName}**`,
+              parse_mode: 'Markdown'
+            });
+          } catch (photoError) {
+            logger.warn(`Không gửi được avatar cho ${username}: ${photoError.message}`);
+          }
+        }
+
+      } catch (error) {
+        logger.error(`Error getting user info for ${username}:`, error.message);
+        this.bot.sendMessage(chatId, `❌ Lỗi khi lấy thông tin user @${username}!`);
+      }
     });
 
 
