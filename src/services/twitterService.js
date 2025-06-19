@@ -1,3 +1,6 @@
+const dotenv = require('dotenv');
+dotenv.config();
+
 const axios = require('axios');
 const logger = require('../../utils/logger');
 const TwitterUser = require('../models/TwitterUser');
@@ -5,7 +8,7 @@ const Tweet = require('../models/Tweet');
 
 class TwitterService {
   constructor() {
-    this.apiKey = "ad7adae17acf46aa94de3a22da222d05";
+    this.apiKey = process.env.TWITTER_API_KEY;
     this.baseURL = 'https://api.twitterapi.io';
     this.isMockMode = !this.apiKey || this.apiKey === 'temp_key_for_testing';
     
@@ -18,16 +21,115 @@ class TwitterService {
       tweets: 0,        // $0.15/1k tweets
       userProfiles: 0,  // $0.18/1k user profiles  
       followers: 0,     // $0.15/1k followers
-      requests: 0       // $0.00015 per request minimum
+      requests: 0,      // $0.00015 per request minimum
+      savedByOptimization: 0 // Track API calls saved
+    };
+
+    // PRACTICAL OPTIMIZATION: Simple user activity tracking
+    this.userActivity = new Map(); // username -> { lastTweetTime, emptyChecks, interval }
+    
+    // PRACTICAL OPTIMIZATION: Simple cache with TTL
+    this.cache = new Map(); // key -> { data, expiry }
+    
+    // PRACTICAL OPTIMIZATION: Dynamic intervals based on activity
+    this.intervals = {
+      active: 5 * 60 * 1000,      // 5 phút cho users có tweets
+      normal: 15 * 60 * 1000,     // 15 phút cho users bình thường  
+      inactive: 60 * 60 * 1000,   // 1 giờ cho users không hoạt động
+      dead: 6 * 60 * 60 * 1000    // 6 giờ cho users "chết"
     };
     
     if (this.isMockMode) {
       logger.warn('🧪 Twitter Service chạy ở chế độ Mock (không có API key thật)');
     } else {
-      logger.info('🚀 Twitter Service initialized with TwitterAPI.io');
+      logger.info('🚀 Twitter Service initialized with TwitterAPI.io + Smart Optimization');
       logger.info('📊 Rate limit: 150 requests/second, Average response: ~700ms');
       logger.info('💰 Pricing: $0.15/1k tweets, $0.18/1k profiles, $0.15/1k followers');
+      logger.info('🎯 Optimization: Smart intervals, caching, empty check detection');
     }
+  }
+
+  // PRACTICAL OPTIMIZATION: Simple cache helpers
+  setCache(key, data, ttlMinutes = 10) {
+    const expiry = Date.now() + (ttlMinutes * 60 * 1000);
+    this.cache.set(key, { data, expiry });
+  }
+
+  getCache(key) {
+    const cached = this.cache.get(key);
+    if (!cached) return null;
+    
+    if (Date.now() > cached.expiry) {
+      this.cache.delete(key);
+      return null;
+    }
+    
+    this.usageStats.savedByOptimization++;
+    return cached.data;
+  }
+
+  // PRACTICAL OPTIMIZATION: Update user activity và tính toán interval
+  updateUserActivity(username, tweets = []) {
+    const now = Date.now();
+    const activity = this.userActivity.get(username) || {
+      lastTweetTime: 0,
+      emptyChecks: 0,
+      interval: this.intervals.normal,
+      lastCheckTime: 0
+    };
+
+    if (tweets.length > 0) {
+      // User có tweets mới
+      const latestTweet = tweets[0];
+      const tweetTime = new Date(latestTweet.createdAt).getTime();
+      
+      activity.lastTweetTime = tweetTime;
+      activity.emptyChecks = 0;
+      
+      // Tính toán interval dựa trên activity
+      const hoursSinceLastTweet = (now - tweetTime) / (1000 * 60 * 60);
+      
+      if (hoursSinceLastTweet < 4) {
+        activity.interval = this.intervals.active; // Very active
+      } else if (hoursSinceLastTweet < 24) {
+        activity.interval = this.intervals.normal; // Normal activity
+      } else {
+        activity.interval = this.intervals.inactive; // Low activity
+      }
+      
+    } else {
+      // Empty check
+      activity.emptyChecks++;
+      
+      // Tăng interval nếu quá nhiều empty checks
+      if (activity.emptyChecks >= 3) {
+        activity.interval = this.intervals.inactive;
+      }
+      if (activity.emptyChecks >= 8) {
+        activity.interval = this.intervals.dead;
+      }
+    }
+
+    activity.lastCheckTime = now;
+    this.userActivity.set(username, activity);
+    
+    logger.debug(`📊 ${username}: interval=${Math.floor(activity.interval/60000)}min, empty=${activity.emptyChecks}`);
+  }
+
+  // PRACTICAL OPTIMIZATION: Check if user should be checked now
+  shouldCheckUser(username) {
+    const activity = this.userActivity.get(username);
+    if (!activity) return true; // First time checking
+    
+    const timeSinceLastCheck = Date.now() - activity.lastCheckTime;
+    const shouldCheck = timeSinceLastCheck >= activity.interval;
+    
+    if (!shouldCheck) {
+      this.usageStats.savedByOptimization++;
+      logger.debug(`⏰ Skip ${username} (${Math.floor(timeSinceLastCheck/60000)}/${Math.floor(activity.interval/60000)} min)`);
+    }
+    
+    return shouldCheck;
   }
 
   // Track usage and estimate costs
@@ -46,11 +148,13 @@ class TwitterService {
     };
 
     const totalCost = Object.values(costs).reduce((sum, cost) => sum + cost, 0);
+    const savedCost = this.usageStats.savedByOptimization * 0.00015;
 
     return {
       usage: this.usageStats,
       estimatedCosts: costs,
       totalEstimatedCost: totalCost.toFixed(6),
+      savedCost: savedCost.toFixed(6),
       currency: 'USD'
     };
   }
@@ -192,9 +296,19 @@ class TwitterService {
     }
   }
 
-  // Lấy tweets mới của user - Enhanced with better pagination support
+  // Lấy tweets mới của user - Enhanced with smart caching
   async getUserTweets(username, cursor = null) {
     try {
+      // PRACTICAL OPTIMIZATION: Check cache first (only for first page)
+      if (!cursor) {
+        const cacheKey = `tweets_${username}`;
+        const cached = this.getCache(cacheKey);
+        if (cached) {
+          logger.debug(`⚡ Cache hit for ${username} tweets`);
+          return { tweets: cached, status: 'success', fromCache: true };
+        }
+      }
+
       // Mock mode cho testing
       if (this.isMockMode) {
         logger.info(`🧪 Mock mode: No tweets for user ${username}`);
@@ -219,10 +333,16 @@ class TwitterService {
       if (result.success) {
         const tweets = result.data?.tweets || [];
         
+        // PRACTICAL OPTIMIZATION: Cache results (only first page)
+        if (!cursor && tweets.length > 0) {
+          this.setCache(`tweets_${username}`, tweets, 8); // Cache 8 phút
+        }
+        
         logger.info(`📊 TwitterAPI response for ${username}:`, {
           tweetsCount: tweets.length,
           hasNextPage: result.has_next_page,
-          nextCursor: result.next_cursor ? 'available' : 'none'
+          nextCursor: result.next_cursor ? 'available' : 'none',
+          fromCache: false
         });
 
         // DEBUG: Log từng tweet để debug (chỉ trong debug mode)
@@ -242,7 +362,8 @@ class TwitterService {
           tweets: tweets,
           has_next_page: result.has_next_page,
           next_cursor: result.next_cursor,
-          status: 'success'
+          status: 'success',
+          fromCache: false
         };
       } else {
         throw new Error(result.error.message || 'Failed to get tweets');
@@ -332,23 +453,40 @@ class TwitterService {
     }
   }
 
-  // Check tweets mới cho tất cả users
+  // PRACTICAL OPTIMIZATION: Smart check tweets với intelligent scheduling
   async checkNewTweets() {
     try {
       const users = await this.getTrackedUsers();
       let newTweets = [];
 
-      logger.info(`🔍 Checking ${users.length} users for new tweets`);
+      logger.info(`🔍 Checking ${users.length} users for new tweets (with smart optimization)`);
 
-      for (const user of users) {
+      // PRACTICAL OPTIMIZATION: Filter users cần check
+      const usersToCheck = users.filter(user => this.shouldCheckUser(user.username));
+      const skippedCount = users.length - usersToCheck.length;
+      
+      if (skippedCount > 0) {
+        logger.info(`⏰ Smart scheduling: checking ${usersToCheck.length}/${users.length} users (saved ${skippedCount} API calls)`);
+      }
+
+      if (usersToCheck.length === 0) {
+        logger.info(`📭 No users need checking right now`);
+        return [];
+      }
+
+      // PRACTICAL OPTIMIZATION: Add delay giữa requests để tránh overwhelm
+      for (const [index, user] of usersToCheck.entries()) {
         try {
-          logger.info(`👤 Checking user: ${user.username} (lastTweetId: ${user.lastTweetId})`);
+          logger.info(`👤 Checking user ${index + 1}/${usersToCheck.length}: ${user.username} (lastTweetId: ${user.lastTweetId})`);
           
           const tweetsData = await this.getUserTweets(user.username);
           
+          // PRACTICAL OPTIMIZATION: Update activity tracking
+          this.updateUserActivity(user.username, tweetsData.tweets || []);
+          
           // TwitterAPI.io last_tweets endpoint trả về { tweets: [...] }
           if (tweetsData.tweets && tweetsData.tweets.length > 0) {
-            logger.info(`📨 Found ${tweetsData.tweets.length} tweets for ${user.username}`);
+            logger.info(`📨 Found ${tweetsData.tweets.length} tweets for ${user.username} (cache: ${tweetsData.fromCache || false})`);
             
             // Sắp xếp tweets theo thời gian giảm dần (mới nhất trước)
             const sortedTweets = tweetsData.tweets.sort((a, b) => 
@@ -454,6 +592,12 @@ class TwitterService {
           } else {
             logger.info(`📪 No tweets found for ${user.username}`);
           }
+
+          // PRACTICAL OPTIMIZATION: Add small delay between users
+          if (index < usersToCheck.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 1000)); // 1 second delay
+          }
+
         } catch (error) {
           logger.error(`Lỗi check tweets cho user ${user.username}:`, {
             message: error.message,
@@ -461,6 +605,16 @@ class TwitterService {
           });
         }
       }
+
+      // Log optimization stats
+      const stats = this.getUsageStats();
+      logger.info(`💰 Optimization summary:`, {
+        usersChecked: usersToCheck.length,
+        usersSkipped: skippedCount,
+        apiCallsSaved: this.usageStats.savedByOptimization,
+        estimatedSavings: stats.savedCost,
+        newTweetsFound: newTweets.length
+      });
 
       if (newTweets.length > 0) {
         logger.info(`🎉 Found ${newTweets.length} new tweets total!`);

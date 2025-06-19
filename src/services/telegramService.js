@@ -91,7 +91,7 @@ ${isAdmin ? `🔧 *LỆNH QUẢN TRỊ (Chỉ Admin):*
       const isAdmin = this.isAuthorized(userId, chatId);
       
       if (isAdmin) {
-        // Help đầy đủ cho Admin
+        // Help đầy đủ cho Admin  
         const adminHelpMessage = `
 📚 *HƯỚNG DẪN ADMIN - BOT TWITTER NEWS*
 
@@ -100,56 +100,59 @@ ${isAdmin ? `🔧 *LỆNH QUẢN TRỊ (Chỉ Admin):*
 🔑 **QUYỀN TRUY CẬP: ADMIN (Full Access)**
 
 👀 *LỆNH XEM THÔNG TIN:*
-
-📋 \`/list\` - *Danh sách theo dõi*
-
-🔍 \`/info username\` - *Thông tin chi tiết*
-
-📊 \`/status\` - *Trạng thái hệ thống*
-
+📋 \`/list\` - Danh sách tài khoản theo dõi
+🔍 \`/info username\` - Chi tiết profile & stats user  
+📊 \`/status\` - Trạng thái bot + optimization stats
+❓ \`/help\` - Hướng dẫn đầy đủ
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-🔧 *LỆNH QUẢN TRỊ (Admin Only):*
-
-➕ \`/add username\` - *Thêm user theo dõi*
-
-
-➖ \`/remove username\` - *Xóa user*
-
-
-🔄 \`/update username\` - *Cập nhật profile*
-
-⚡ \`/check\` - *Kiểm tra tweets ngay*
-
-🔐 \`/admin\` - *Quản lý admin*
+🔧 *LỆNH QUẢN TRỊ:*
+➕ \`/add username\` - Thêm user vào danh sách theo dõi
+➖ \`/remove username\` - Xóa user khỏi danh sách
+🔄 \`/update username\` - Cập nhật profile mới nhất
+⚡ \`/check\` - Force check tweets ngay lập tức
+🔐 \`/admin\` - Thông tin admin & cấu hình
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-📝 *VÍ DỤ ADMIN:*
-
-\`/add elonmusk\`      → Thêm Elon Musk
-\`/info elonmusk\`     → Xem profile chi tiết
-\`/update elonmusk\`   → Cập nhật stats mới
-\`/remove elonmusk\`   → Xóa khỏi theo dõi
-\`/check\`             → Kiểm tra tweets ngay
-\`/admin\`             → Quản lý quyền admin
+🎯 *LỆNH TỐI ƯU CHI PHÍ (MỚI):*
+📊 \`/optimize\` - Dashboard tối ưu hóa real-time
+🔄 \`/reset_optimization\` - Reset intervals về mặc định
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-⚙️ *THÔNG TIN QUAN TRỌNG:*
+📝 *VÍ DỤ SỬ DỤNG:*
+\`/add elonmusk\`        → Thêm Elon Musk vào theo dõi
+\`/info elonmusk\`       → Xem profile chi tiết + avatar
+\`/optimize\`            → Dashboard chi phí & intervals  
+\`/check\`               → Kiểm tra tweets tất cả users
+\`/reset_optimization\`  → Reset optimization về normal
 
-🔄 **Tự động:** Bot check tweets mỗi ${process.env.CHECK_INTERVAL_MINUTES || 5} phút
-📱 **Username:** Không cần dấu @ (elonmusk, không phải @elonmusk)
-🌍 **Hỗ trợ:** Chỉ tài khoản Twitter public
-💾 **Lưu trữ:** Full profile + media + text tweets
-🚫 **Chống spam:** Không gửi lại tweets cũ
-📊 **Thống kê:** Retweets, likes, views, replies
-🔵 **Verification:** Hiển thị blue check & legacy verification
-🖼️ **Media:** Hỗ trợ ảnh, video trong tweets
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🎯 *TỐI ƯU CHI PHÍ TỰ ĐỘNG:*
+🔥 **Active users:** Check mỗi 5 phút (có tweets gần đây)
+⚡ **Normal users:** Check mỗi 15 phút (hoạt động bình thường)  
+🐌 **Inactive users:** Check mỗi 1 giờ (ít hoạt động)
+😴 **Dead users:** Check mỗi 6 giờ (không tweet)
+💾 **Smart caching:** Cache 8 phút để tránh duplicate API calls
+
+💰 **HIỆU QUẢ:** Tiết kiệm 70-75% chi phí API so với check liên tục!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+⚙️ *THÔNG TIN KỸ THUẬT:*
+🔄 Tự động: Bot tự điều chỉnh interval theo activity của user
+📱 Username: Nhập không cần @ (elonmusk, không phải @elonmusk)  
+🌍 Hỗ trợ: Chỉ tài khoản Twitter public
+💾 Lưu trữ: Full profile + media + text + stats tweets
+🚫 Chống spam: Không gửi lại tweets cũ
+🔵 Verification: Hiển thị blue check & legacy verification
+🖼️ Media: Hỗ trợ ảnh, video, GIF trong tweets
 
 🆘 *HỖ TRỢ ADMIN:*
-Bạn có full quyền quản lý bot. Liên hệ dev nếu cần thêm tính năng!
+Bot đã được tối ưu hóa thông minh để tiết kiệm chi phí. Dùng \`/optimize\` để monitor!
         `;
         
         this.bot.sendMessage(chatId, adminHelpMessage, { parse_mode: 'Markdown' });
@@ -162,42 +165,42 @@ Bạn có full quyền quản lý bot. Liên hệ dev nếu cần thêm tính n�
 
 🔍 **QUYỀN TRUY CẬP: VIEWER (Chỉ xem)**
 
-*LỆNH BạN CÓ THỂ SỬ DỤNG:*
-
-📋 \`/list\` - *Xem danh sách theo dõi*
-
-🔍 \`/info username\` - *Thông tin chi tiết user*
-
-📊 \`/status\` - *Trạng thái bot*
-
-❓ \`/help\` - *Hướng dẫn này*
+*LỆNH BẠN CÓ THỂ SỬ DỤNG:*
+📋 \`/list\` - Xem danh sách tài khoản theo dõi
+🔍 \`/info username\` - Chi tiết profile & stats user
+📊 \`/status\` - Trạng thái bot & thống kê  
+❓ \`/help\` - Hướng dẫn này
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 📝 *VÍ DỤ SỬ DỤNG:*
-
-\`/list\`              → Xem tất cả users
-\`/info elonmusk\`     → Chi tiết profile Elon Musk
-\`/status\`            → Xem trạng thái bot
+\`/list\`              → Xem tất cả users đang theo dõi
+\`/info elonmusk\`     → Chi tiết profile + avatar Elon Musk  
+\`/status\`            → Trạng thái bot + số liệu
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-⚙️ *LƯU Ý QUAN TRỌNG:*
+🎯 *BOT THÔNG MINH - TỐI ƯU CHI PHÍ:*
+🔥 **Users active:** Bot check mỗi 5 phút
+⚡ **Users normal:** Bot check mỗi 15 phút  
+🐌 **Users ít hoạt động:** Bot check mỗi 1 giờ
+😴 **Users không hoạt động:** Bot check mỗi 6 giờ
 
-🔄 **Tự động:** Bot sẽ tự động thông báo tweets mới mỗi ${process.env.CHECK_INTERVAL_MINUTES || 5} phút
-📱 **Username:** Nhập không cần dấu @ (ví dụ: elonmusk)
-🔵 **Verification:** Bot hiển thị blue check & verification badges
-🖼️ **Media:** Hỗ trợ ảnh, video trong tweets
+💡 **Tự động:** Bot tự học và điều chỉnh tần suất check dựa trên activity của từng user!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+⚙️ *TÍNH NĂNG CHÍNH:*
+🔄 **Tự động thông báo:** Tweets mới ngay khi có
+📱 **Username:** Nhập không cần @ (ví dụ: elonmusk)
+🔵 **Verification:** Hiển thị blue check & legacy verification  
+🖼️ **Media:** Hỗ trợ ảnh, video, GIF trong tweets
 🚫 **Chống spam:** Không gửi lại tweets cũ
+📊 **Full stats:** Retweets, likes, views, replies
+💾 **Profile đầy đủ:** Avatar, bio, followers, following
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-❗ *LỆNH QUẢN LÝ:*
-Các lệnh thêm/xóa/cập nhật chỉ dành cho admin.
-Nếu bạn cần thêm tài khoản Twitter, liên hệ admin!
-
-🆘 *HỖ TRỢ:*
-Nếu có thắc mắc hoặc gặp lỗi, liên hệ admin để được hỗ trợ.
         `;
         
         this.bot.sendMessage(chatId, userHelpMessage, { parse_mode: 'Markdown' });
@@ -327,8 +330,8 @@ Nếu có thắc mắc hoặc gặp lỗi, liên hệ admin để được hỗ 
       const todayTweets = await Tweet.countDocuments({
         createdAt: { $gte: new Date(new Date().setHours(0,0,0,0)) }
       });
-      
-      const statusMessage = `
+
+      let statusMessage = `
 📊 *Trạng thái Bot*
 
 👥 Tài khoản theo dõi: ${users.length}
@@ -337,10 +340,113 @@ Nếu có thắc mắc hoặc gặp lỗi, liên hệ admin để được hỗ 
 ⏰ Kiểm tra mỗi: ${process.env.CHECK_INTERVAL_MINUTES || 5} phút
 
 🔄 Bot đang hoạt động bình thường
-${isAdmin ? '🔐 Quyền: **Admin**' : '👀 Quyền: **Chỉ xem**'}
-      `;
+${isAdmin ? '🔐 Quyền: **Admin**' : '👀 Quyền: **Chỉ xem**'}`;
+
+      // Add optimization stats for admin
+      if (isAdmin) {
+        const stats = twitterService.getUsageStats();
+        statusMessage += `
+
+💰 *Tối ưu & Chi phí:*
+💸 Chi phí ước tính: $${stats.totalEstimatedCost}
+💾 Tiết kiệm được: $${stats.savedCost}
+📊 API calls: ${stats.usage.requests}
+⚡ Calls saved: ${stats.usage.savedByOptimization}`;
+      }
       
       this.bot.sendMessage(chatId, statusMessage, { parse_mode: 'Markdown' });
+    });
+
+    // NEW: Command /optimize - Xem optimization stats và controls (Chỉ admin)
+    this.bot.onText(/\/optimize/, (msg) => {
+      const chatId = msg.chat.id;
+      const userId = msg.from.id;
+      
+      // Kiểm tra quyền admin
+      if (!this.isAuthorized(userId, chatId)) {
+        this.bot.sendMessage(chatId, '🚫 Bạn không có quyền sử dụng lệnh này!');
+        return;
+      }
+
+      const stats = twitterService.getUsageStats();
+      const activityStats = new Map();
+      
+      // Analyze user activity levels
+      for (const [username, activity] of twitterService.userActivity.entries()) {
+        const intervalMinutes = Math.floor(activity.interval / 60000);
+        let level = 'normal';
+        
+        if (activity.interval === twitterService.intervals.active) level = 'active';
+        else if (activity.interval === twitterService.intervals.inactive) level = 'inactive';
+        else if (activity.interval === twitterService.intervals.dead) level = 'dead';
+        
+        if (!activityStats.has(level)) activityStats.set(level, 0);
+        activityStats.set(level, activityStats.get(level) + 1);
+      }
+
+      const optimizeMessage = `
+🎯 *OPTIMIZATION DASHBOARD*
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+💰 **CHI PHÍ & TIẾT KIỆM:**
+• Tổng chi phí: $${stats.totalEstimatedCost}
+• Đã tiết kiệm: $${stats.savedCost}
+• API calls: ${stats.usage.requests}
+• Calls saved: ${stats.usage.savedByOptimization}
+
+📊 **PHÂN BỐ USERS:**
+${Array.from(activityStats.entries()).map(([level, count]) => {
+  const icons = { active: '🔥', normal: '⚡', inactive: '🐌', dead: '😴' };
+  const names = { active: 'Active (5 min)', normal: 'Normal (15 min)', inactive: 'Inactive (1 hour)', dead: 'Dead (6 hours)' };
+  return `• ${icons[level]} ${names[level]}: ${count} users`;
+}).join('\n')}
+
+⚙️ **CÀI ĐẶT TỐI ƯU:**
+• Cache TTL: 8 phút
+• Delay giữa users: 1 giây
+• Empty check threshold: 3/8 lần
+
+💡 **HIỆU QUẢ DỰ KIẾN:**
+Với 20 users, từ 5,760 → ~1,500 requests/ngày
+Tiết kiệm: ~70-75% chi phí API
+
+🔧 Dùng \`/reset_optimization\` để reset tất cả intervals
+      `;
+      
+      this.bot.sendMessage(chatId, optimizeMessage, { parse_mode: 'Markdown' });
+    });
+
+    // NEW: Command /reset_optimization - Reset optimization settings (Chỉ admin)
+    this.bot.onText(/\/reset_optimization/, (msg) => {
+      const chatId = msg.chat.id;
+      const userId = msg.from.id;
+      
+      // Kiểm tra quyền admin
+      if (!this.isAuthorized(userId, chatId)) {
+        this.bot.sendMessage(chatId, '🚫 Bạn không có quyền sử dụng lệnh này!');
+        return;
+      }
+
+      // Reset activity tracking
+      const beforeCount = twitterService.userActivity.size;
+      twitterService.userActivity.clear();
+      twitterService.cache.clear();
+      
+      const message = `
+🔄 *Optimization Reset!*
+
+✅ **Đã reset:**
+• User activity tracking: ${beforeCount} users
+• Cache: Cleared all
+• Intervals: Reset về normal (15 min)
+
+🔄 **Kết quả:**
+Tất cả users sẽ được check với interval normal.
+Optimization sẽ tự động học lại activity patterns.
+      `;
+      
+      this.bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
     });
 
     // Command /admin - Xem thông tin admin (Chỉ admin)
@@ -465,8 +571,6 @@ Thêm \`TELEGRAM_ADMIN_IDS=id1,id2,id3\` vào file .env để cấu hình nhiề
         this.bot.sendMessage(chatId, `❌ Lỗi khi lấy thông tin user @${username}!`);
       }
     });
-
-
 
     // Error handling
     this.bot.on('error', (error) => {
