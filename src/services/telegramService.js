@@ -7,30 +7,70 @@ class TelegramService {
   constructor() {
     this.bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { polling: true });
     this.chatId = process.env.TELEGRAM_CHAT_ID;
+    
+    // Danh sách admin được phép sử dụng các lệnh quản lý
+    this.adminUsers = this.parseAdminUsers(process.env.TELEGRAM_ADMIN_IDS);
+    
     this.setupCommands();
+  }
+
+  // Parse danh sách admin IDs từ environment variable
+  parseAdminUsers(adminIds) {
+    if (!adminIds) {
+      // Nếu không có admin IDs, chỉ cho phép chat ID chính được cấu hình
+      const mainChatId = process.env.TELEGRAM_CHAT_ID;
+      if (mainChatId) {
+        return [mainChatId.toString()];
+      }
+      return [];
+    }
+    
+    return adminIds.split(',').map(id => id.trim());
+  }
+
+  // Kiểm tra quyền admin
+  isAuthorized(userId, chatId) {
+    const userIdStr = userId.toString();
+    const chatIdStr = chatId.toString();
+    
+    // Admin IDs hoặc chat ID chính
+    const isAuthorized = this.adminUsers.includes(userIdStr) || this.adminUsers.includes(chatIdStr);
+    
+    // Log để theo dõi
+    if (!isAuthorized) {
+      logger.warn(`Unauthorized access attempt - User ID: ${userId}, Chat ID: ${chatId}`);
+    }
+    
+    return isAuthorized;
   }
 
   setupCommands() {
     // Command /start
     this.bot.onText(/\/start/, (msg) => {
       const chatId = msg.chat.id;
+      const userId = msg.from.id;
+      const isAdmin = this.isAuthorized(userId, chatId);
+      
       const welcomeMessage = `
 🤖 *Chào mừng bạn đến với Bot Twitter News!*
 
 Bot này sẽ theo dõi các tài khoản Twitter và thông báo khi có tweet mới.
 
-*Các lệnh có sẵn:*
-/add @username - Thêm tài khoản Twitter để theo dõi
-/remove @username - Xóa tài khoản khỏi danh sách theo dõi
+*Các lệnh công khai:*
 /list - Xem danh sách tài khoản đang theo dõi
-/check - Kiểm tra tweets mới ngay lập tức
 /status - Xem trạng thái bot
 /help - Xem hướng dẫn
+
+${isAdmin ? `*Các lệnh quản trị (chỉ admin):*
+/add @username - Thêm tài khoản Twitter để theo dõi
+/remove @username - Xóa tài khoản khỏi danh sách theo dõi
+/check - Kiểm tra tweets mới ngay lập tức
+/admin - Xem thông tin quyền truy cập
 
 *Ví dụ:*
 \`/add elonmusk\`
 \`/remove elonmusk\`
-\`/check\`
+\`/check\`` : `*Lưu ý:* Bạn chỉ có thể xem thông tin. Các lệnh quản lý chỉ dành cho admin.`}
       `;
       
       this.bot.sendMessage(chatId, welcomeMessage, { parse_mode: 'Markdown' });
@@ -61,10 +101,17 @@ Bot này sẽ theo dõi các tài khoản Twitter và thông báo khi có tweet 
       this.bot.sendMessage(chatId, helpMessage, { parse_mode: 'Markdown' });
     });
 
-    // Command /add
+    // Command /add - Chỉ admin
     this.bot.onText(/\/add (.+)/, async (msg, match) => {
       const chatId = msg.chat.id;
+      const userId = msg.from.id;
       const username = match[1].replace('@', '').trim();
+
+      // Kiểm tra quyền admin
+      if (!this.isAuthorized(userId, chatId)) {
+        this.bot.sendMessage(chatId, '🚫 Bạn không có quyền sử dụng lệnh này!');
+        return;
+      }
 
       if (!username) {
         this.bot.sendMessage(chatId, '❌ Vui lòng nhập username!\nVí dụ: `/add elonmusk`', { parse_mode: 'Markdown' });
@@ -82,10 +129,17 @@ Bot này sẽ theo dõi các tài khoản Twitter và thông báo khi có tweet 
       }
     });
 
-    // Command /remove
+    // Command /remove - Chỉ admin
     this.bot.onText(/\/remove (.+)/, async (msg, match) => {
       const chatId = msg.chat.id;
+      const userId = msg.from.id;
       const username = match[1].replace('@', '').trim();
+
+      // Kiểm tra quyền admin
+      if (!this.isAuthorized(userId, chatId)) {
+        this.bot.sendMessage(chatId, '🚫 Bạn không có quyền sử dụng lệnh này!');
+        return;
+      }
 
       if (!username) {
         this.bot.sendMessage(chatId, '❌ Vui lòng nhập username!\nVí dụ: `/remove elonmusk`', { parse_mode: 'Markdown' });
@@ -122,9 +176,16 @@ Bot này sẽ theo dõi các tài khoản Twitter và thông báo khi có tweet 
       this.bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
     });
 
-    // Command /check - Kiểm tra tweets thủ công
+    // Command /check - Kiểm tra tweets thủ công (Chỉ admin)
     this.bot.onText(/\/check/, async (msg) => {
       const chatId = msg.chat.id;
+      const userId = msg.from.id;
+      
+      // Kiểm tra quyền admin
+      if (!this.isAuthorized(userId, chatId)) {
+        this.bot.sendMessage(chatId, '🚫 Bạn không có quyền sử dụng lệnh này!');
+        return;
+      }
       
       this.bot.sendMessage(chatId, '⏳ Đang kiểm tra tweets mới...');
       
@@ -141,6 +202,8 @@ Bot này sẽ theo dõi các tài khoản Twitter và thông báo khi có tweet 
     // Command /status - Xem trạng thái bot
     this.bot.onText(/\/status/, async (msg) => {
       const chatId = msg.chat.id;
+      const userId = msg.from.id;
+      const isAdmin = this.isAuthorized(userId, chatId);
       
       const users = await twitterService.getTrackedUsers();
       const Tweet = require('../models/Tweet');
@@ -158,9 +221,38 @@ Bot này sẽ theo dõi các tài khoản Twitter và thông báo khi có tweet 
 ⏰ Kiểm tra mỗi: ${process.env.CHECK_INTERVAL_MINUTES || 5} phút
 
 🔄 Bot đang hoạt động bình thường
+${isAdmin ? '🔐 Quyền: **Admin**' : '👀 Quyền: **Chỉ xem**'}
       `;
       
       this.bot.sendMessage(chatId, statusMessage, { parse_mode: 'Markdown' });
+    });
+
+    // Command /admin - Xem thông tin admin (Chỉ admin)
+    this.bot.onText(/\/admin/, (msg) => {
+      const chatId = msg.chat.id;
+      const userId = msg.from.id;
+      const userName = msg.from.username || msg.from.first_name || 'Unknown';
+      
+      // Kiểm tra quyền admin
+      if (!this.isAuthorized(userId, chatId)) {
+        this.bot.sendMessage(chatId, '🚫 Bạn không có quyền sử dụng lệnh này!');
+        return;
+      }
+      
+      const adminMessage = `
+🔐 *Thông tin Admin*
+
+👤 User hiện tại: ${userName} (ID: ${userId})
+💬 Chat ID: ${chatId}
+
+📋 *Danh sách Admin IDs:*
+${this.adminUsers.map(id => `• ${id}`).join('\n')}
+
+*Hướng dẫn cấu hình:*
+Thêm \`TELEGRAM_ADMIN_IDS=id1,id2,id3\` vào file .env để cấu hình nhiều admin.
+      `;
+      
+      this.bot.sendMessage(chatId, adminMessage, { parse_mode: 'Markdown' });
     });
 
 
@@ -171,6 +263,7 @@ Bot này sẽ theo dõi các tài khoản Twitter và thông báo khi có tweet 
     });
 
     logger.info('Telegram Bot đã khởi động thành công!');
+    logger.info(`🔐 Admin Users: ${this.adminUsers.length > 0 ? this.adminUsers.join(', ') : 'Chỉ Chat ID chính'}`);
   }
 
   // Gửi tweet mới lên Telegram

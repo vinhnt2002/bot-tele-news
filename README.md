@@ -1,6 +1,11 @@
 # Twitter Telegram Bot 🤖
 
-Bot tự động theo dõi tài khoản Twitter và thông báo lên Telegram khi có bài viết mới.
+[![Node.js](https://img.shields.io/badge/Node.js-18+-green.svg)](https://nodejs.org/)
+[![MongoDB](https://img.shields.io/badge/MongoDB-4.4+-green.svg)](https://www.mongodb.com/)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![GitHub stars](https://img.shields.io/github/stars/username/bot-news-tele.svg)](https://github.com/username/bot-news-tele/stargazers)
+
+> 🚀 Bot tự động theo dõi tài khoản Twitter và thông báo lên Telegram khi có bài viết mới với format tin tức chuyên nghiệp.
 
 ## ✨ Tính năng
 
@@ -48,6 +53,9 @@ TWITTER_API_KEY=your_twitter_api_key_here
 # Telegram Chat ID nơi bot sẽ đăng tin (có thể lấy từ @userinfobot)
 TELEGRAM_CHAT_ID=your_chat_id_here
 
+# 🔐 Telegram Admin IDs (cách nhau bởi dấu phẩy, tùy chọn)
+TELEGRAM_ADMIN_IDS=123456789,987654321
+
 # Thời gian check Twitter (phút)
 CHECK_INTERVAL_MINUTES=5
 
@@ -58,52 +66,112 @@ PORT=3000
 NODE_ENV=development
 \`\`\`
 
+> **🔑 Cấu hình Admin:**
+> - Nếu **không** cấu hình `TELEGRAM_ADMIN_IDS`, `TELEGRAM_CHAT_ID` tự động thành admin
+> - Nếu **có** cấu hình `TELEGRAM_ADMIN_IDS`, chỉ những user trong danh sách mới có quyền admin
+> - Để lấy User ID, nhắn tin cho [@userinfobot](https://t.me/userinfobot)
+
 ### 4. Thiết lập các dịch vụ
 
 #### 📱 Telegram Bot
-1. Nhắn tin cho [@BotFather](https://t.me/BotFather) trên Telegram
-2. Tạo bot mới bằng lệnh \`/newbot\`
-3. Lấy token và điền vào \`TELEGRAM_BOT_TOKEN\`
-4. Để lấy Chat ID, nhắn tin cho [@userinfobot](https://t.me/userinfobot)
+| Bước | Hành động | Ghi chú |
+|------|-----------|---------|
+| 1 | Nhắn tin cho [@BotFather](https://t.me/BotFather) | Tạo bot Telegram |
+| 2 | Gửi lệnh `/newbot` và làm theo hướng dẫn | Đặt tên bot |
+| 3 | Copy **Bot Token** → `TELEGRAM_BOT_TOKEN` | Giữ bí mật token |
+| 4 | Nhắn tin cho [@userinfobot](https://t.me/userinfobot) | Lấy Chat ID |
+| 5 | Copy **Chat ID** → `TELEGRAM_CHAT_ID` | Nơi nhận notifications |
 
 #### 🐦 Twitter API
-1. Đăng ký tài khoản tại [TwitterAPI.io](https://twitterapi.io)
-2. Lấy API key và điền vào \`TWITTER_API_KEY\`
+| Bước | Hành động | Liên kết |
+|------|-----------|----------|
+| 1 | Đăng ký tại TwitterAPI.io | [🔗 twitterapi.io](https://twitterapi.io) |
+| 2 | Lấy API Key | Dashboard → API Keys |
+| 3 | Copy key → `TWITTER_API_KEY` | Rate limit: 300 requests/hour |
 
 #### 🗄️ MongoDB
-1. Cài đặt MongoDB local hoặc sử dụng MongoDB Atlas
-2. Cập nhật connection string trong \`MONGODB_URI\`
+| Tùy chọn | Hướng dẫn | Link |
+|----------|-----------|------|
+| **Local** | Cài MongoDB Community | [🔗 MongoDB Download](https://www.mongodb.com/try/download/community) |
+| **Cloud** | Sử dụng MongoDB Atlas (Free) | [🔗 MongoDB Atlas](https://www.mongodb.com/atlas) |
+| **Docker** | `docker run -p 27017:27017 mongo` | [🔗 Docker Hub](https://hub.docker.com/_/mongo) |
 
 ### 5. Chạy ứng dụng
 
+| Mode | Command | Mô tả |
+|------|---------|-------|
+| 🔧 **Development** | `npm run dev` | Hot reload với nodemon |
+| 🚀 **Production** | `npm start` | Stable production mode |
+| 📊 **PM2** | `pm2 start src/index.js --name twitter-bot` | Process manager |
+
 \`\`\`bash
-# Development mode
+# Development mode (recommended for testing)
 npm run dev
 
 # Production mode
 npm start
 \`\`\`
 
+> 🎉 **Thành công!** Bot sẽ báo trong console khi kết nối thành công tới các dịch vụ.
+
 ## 📖 Sử dụng
 
-### Bot Commands
+### 🎯 Bot Commands
 
-- \`/start\` - Khởi động bot và xem hướng dẫn
-- \`/help\` - Xem danh sách lệnh và hướng dẫn chi tiết
-- \`/add username\` - Thêm tài khoản Twitter để theo dõi
-- \`/remove username\` - Xóa tài khoản khỏi danh sách
-- \`/list\` - Xem danh sách tài khoản đang theo dõi
-- \`/check\` - Kiểm tra tweets mới ngay lập tức
-- \`/status\` - Xem trạng thái bot và thống kê chi tiết
+#### 👥 Commands Công Khai (Tất cả user)
+| Command | Mô tả | Ví dụ |
+|---------|-------|-------|
+| `/start` | Khởi động bot và xem hướng dẫn | `/start` |
+| `/help` | Xem danh sách lệnh và hướng dẫn chi tiết | `/help` |
+| `/list` | Xem danh sách tài khoản đang theo dõi | `/list` |
+| `/status` | Xem trạng thái bot và thống kê chi tiết | `/status` |
 
-### Ví dụ
+#### 🔐 Commands Admin (Chỉ admin)
+| Command | Mô tả | Ví dụ |
+|---------|-------|-------|
+| `/add username` | Thêm tài khoản Twitter để theo dõi | `/add elonmusk` |
+| `/remove username` | Xóa tài khoản khỏi danh sách | `/remove elonmusk` |
+| `/check` | Kiểm tra tweets mới ngay lập tức | `/check` |
+| `/admin` | Xem thông tin quyền truy cập | `/admin` |
 
-\`\`\`
+### 🛡️ **BẢNG TỔNG KẾT QUYỀN**
+
+| Command | 👑 Admin | 👤 User Thường | 📝 Ghi chú |
+|---------|:--------:|:--------------:|-------------|
+| `/start` | ✅ | ✅ | Welcome message |
+| `/help` | ✅ | ✅ | Hướng dẫn sử dụng |
+| `/list` | ✅ | ✅ | Xem danh sách theo dõi |
+| `/status` | ✅ | ✅ | Xem trạng thái bot |
+| `/add` | ✅ | ❌ | Thêm tài khoản Twitter |
+| `/remove` | ✅ | ❌ | Xóa tài khoản Twitter |
+| `/check` | ✅ | ❌ | Kiểm tra tweets thủ công |
+| `/admin` | ✅ | ❌ | Xem thông tin admin |
+
+> **⚡ Quan trọng:** 
+> - User thường chỉ có thể **xem thông tin**, không thể quản lý
+> - Tweet notifications gửi tới `TELEGRAM_CHAT_ID` duy nhất
+> - Mỗi user có conversation **riêng tư** với bot
+> - Nếu không cấu hình `TELEGRAM_ADMIN_IDS`, `TELEGRAM_CHAT_ID` tự động thành admin
+
+### 💻 Ví dụ sử dụng
+
+\`\`\`bash
+# Admin thêm tài khoản theo dõi
 /add elonmusk
 /add VitalikButerin
 /add naval
+
+# Kiểm tra danh sách
 /list
+
+# Xóa tài khoản
 /remove elonmusk
+
+# Kiểm tra tweets thủ công
+/check
+
+# Xem trạng thái
+/status
 \`\`\`
 
 ## 📁 Cấu trúc project
@@ -132,72 +200,170 @@ bot-news-tele/
 └── README.md
 \`\`\`
 
-## 🔧 Cấu hình
+## 🔧 Cấu hình Nâng cao
 
-### Thời gian kiểm tra
+### ⏰ Thời gian kiểm tra
 
-Thay đổi \`CHECK_INTERVAL_MINUTES\` trong file \`.env\` để điều chỉnh tần suất kiểm tra tweets.
+| Biến môi trường | Mặc định | Mô tả |
+|-----------------|----------|-------|
+| `CHECK_INTERVAL_MINUTES` | `5` | Tần suất check tweets (phút) |
 
-### Logs
+\`\`\`bash
+# Kiểm tra mỗi 2 phút (nhanh hơn)
+CHECK_INTERVAL_MINUTES=2
 
-Logs được lưu trong thư mục \`logs/\`:
-- \`combined.log\` - Tất cả logs
-- \`error.log\` - Chỉ error logs
+# Kiểm tra mỗi 10 phút (tiết kiệm API calls)
+CHECK_INTERVAL_MINUTES=10
+\`\`\`
+
+### 📝 Logs
+
+| File | Nội dung | Vị trí |
+|------|----------|--------|
+| `combined.log` | Tất cả logs | `logs/combined.log` |
+| `error.log` | Chỉ error logs | `logs/error.log` |
+| Console | Real-time logs | Terminal output |
 
 ## 🚦 Deployment
 
-### PM2 (Production)
+### 🔄 PM2 (Production - Khuyến nghị)
 
 \`\`\`bash
+# Cài đặt PM2 globally
 npm install -g pm2
+
+# Start bot với PM2
 pm2 start src/index.js --name "twitter-bot"
+
+# Auto start khi boot
 pm2 startup
+
+# Lưu cấu hình
 pm2 save
+
+# Các lệnh quản lý hữu ích
+pm2 list                    # Xem danh sách process
+pm2 restart twitter-bot     # Restart bot
+pm2 stop twitter-bot        # Dừng bot
+pm2 logs twitter-bot        # Xem logs
+pm2 monit                   # Monitor dashboard
 \`\`\`
 
-### Docker
+### 🐳 Docker
 
 \`\`\`dockerfile
 FROM node:18-alpine
+
+# Cài thêm timezone data
+RUN apk add --no-cache tzdata
+
 WORKDIR /app
+
+# Copy package files
 COPY package*.json ./
 RUN npm ci --only=production
+
+# Copy source code
 COPY . .
+
+# Create logs directory
+RUN mkdir -p logs
+
+# Expose port
 EXPOSE 3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+  CMD node -e "console.log('Health check OK')" || exit 1
+
+# Start app
 CMD ["npm", "start"]
 \`\`\`
 
-## 🐛 Troubleshooting
+\`\`\`bash
+# Build image
+docker build -t twitter-telegram-bot .
 
-### Lỗi thường gặp
+# Run container
+docker run -d \
+  --name twitter-bot \
+  --restart unless-stopped \
+  --env-file .env \
+  -v $(pwd)/logs:/app/logs \
+  twitter-telegram-bot
+\`\`\`
 
-1. **Bot không nhận được tin nhắn**
-   - Kiểm tra token Telegram
-   - Đảm bảo đã start chat với bot
+### ☁️ Docker Compose
 
-2. **Không lấy được tweets**
-   - Kiểm tra Twitter API key
-   - Đảm bảo tài khoản public
-   - Kiểm tra rate limits
+\`\`\`yaml
+version: '3.8'
+services:
+  twitter-bot:
+    build: .
+    container_name: twitter-telegram-bot
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./logs:/app/logs
+    depends_on:
+      - mongodb
 
-3. **Lỗi kết nối MongoDB**
-   - Kiểm tra connection string
-   - Đảm bảo MongoDB đang chạy
+  mongodb:
+    image: mongo:6.0
+    container_name: twitter-bot-db
+    restart: unless-stopped
+    volumes:
+      - mongodb_data:/data/db
+    environment:
+      MONGO_INITDB_DATABASE: twitter-telegram-bot
 
-### Debug mode
+volumes:
+  mongodb_data:
+\`\`\`
 
-Đặt \`NODE_ENV=development\` để xem logs chi tiết.
+## 🐛 Troubleshooting & FAQ
+
+### ❗ Lỗi thường gặp
+
+| 🚨 Vấn đề | 🔍 Nguyên nhân | ✅ Giải pháp |
+|-----------|----------------|--------------|
+| Bot không nhận tin nhắn | Token sai hoặc chưa start chat | Check `TELEGRAM_BOT_TOKEN`, gửi `/start` cho bot |
+| Không lấy được tweets | API key sai hoặc rate limit | Verify `TWITTER_API_KEY`, chờ reset rate limit |
+| Kết nối MongoDB lỗi | Connection string sai | Check `MONGODB_URI`, đảm bảo DB chạy |
+| User không có quyền admin | Chưa config admin IDs | Set `TELEGRAM_ADMIN_IDS` hoặc dùng `TELEGRAM_CHAT_ID` |
+| Bot không gửi notifications | Chat ID sai | Verify `TELEGRAM_CHAT_ID` bằng [@userinfobot](https://t.me/userinfobot) |
+
+### 🔧 Debug Mode
+
+\`\`\`bash
+# Bật debug mode để xem logs chi tiết
+NODE_ENV=development npm run dev
+
+# Hoặc trong .env
+NODE_ENV=development
+\`\`\`
+
+### 📞 Support Commands
+
+| Command | Mô tả | Khi nào dùng |
+|---------|-------|--------------|
+| `/admin` | Xem thông tin admin | Check quyền và user IDs |
+| `/status` | Trạng thái bot | Check kết nối và thống kê |
+| `/check` | Kiểm tra manual | Test API Twitter |
 
 ## 📰 Tính năng Tin tức Nâng cao
 
-### Format Tin tức Telegram
+### 📱 Format Tin tức Telegram
 
 Bot gửi tweets dưới dạng tin tức chuyên nghiệp:
+
+<details>
+<summary>🎨 <strong>Xem Preview Message</strong></summary>
 
 ```
 📰 TIN TỨC MỚI
 
-👤 Elon Musk (@elonmusk)
+👤 Elon Musk (@elonmusk)  
 🕐 5 minutes ago
 
 📝 Nội dung:
@@ -205,19 +371,26 @@ Mars colony will be self-sustaining
 
 📊 Thống kê:
 🔄 1.2K Retweets
-❤️ 5.3K Likes
+❤️ 5.3K Likes  
 💬 234 Replies
 👁️ 50K Views
 
 🔗 Xem bài viết gốc
 ```
 
-### Media Support
+</details>
 
-- 🖼️ **Hình ảnh**: Gửi trực tiếp với caption
-- 📸 **Album**: Tối đa 10 ảnh trong 1 message group
-- 🎥 **Video**: Gửi video hoặc link nếu lỗi
-- 🔗 **Links**: Hiển thị preview tự động
+### 🎬 Media Support
+
+| Loại Media | Xử lý | Giới hạn |
+|------------|-------|----------|
+| 🖼️ **Ảnh đơn** | Gửi trực tiếp với caption | 20MB |
+| 📸 **Album ảnh** | Media group (tối đa 10 ảnh) | 10 ảnh/group |
+| 🎥 **Video** | Upload trực tiếp hoặc link fallback | 50MB |
+| 🔗 **Link** | Auto preview với thumbnail | Không giới hạn |
+| 🎭 **GIF** | Gửi dưới dạng animation | 20MB |
+
+> 💡 **Smart Processing:** Bot tự động làm sạch URLs media thừa khỏi text content.
 
 ### Database Schema
 
@@ -313,22 +486,60 @@ Mars colony will be self-sustaining
 
 ---
 
-## 📄 License
-
-MIT License
+---
 
 ## 🤝 Contributing
 
-Mọi đóng góp đều được chào đón! Hãy tạo pull request hoặc issue.
+Chào mừng mọi đóng góp! 🎉
 
-### Development Guidelines:
-1. Fork repo và tạo feature branch
-2. Commit với message rõ ràng
-3. Test kỹ trước khi PR
-4. Cập nhật README nếu cần
-5. Follow coding conventions hiện tại
+### 🚀 Quick Start cho Contributors
 
-## 📧 Support
+| Bước | Hành động | Command |
+|------|-----------|---------|
+| 1 | Fork repo | GitHub UI |
+| 2 | Clone project | `git clone <your-fork>` |
+| 3 | Create branch | `git checkout -b feature/amazing-feature` |
+| 4 | Make changes | Code với ❤️ |
+| 5 | Test kỹ | `npm test` (if available) |
+| 6 | Commit | `git commit -m "Add amazing feature"` |
+| 7 | Push | `git push origin feature/amazing-feature` |
+| 8 | Pull Request | GitHub UI |
 
-Nếu gặp vấn đề, hãy tạo issue trên GitHub hoặc liên hệ qua email. #   b o t - t e l e - n e w s  
- 
+### 📋 Development Guidelines
+
+- ✅ **Code Style**: Follow existing conventions
+- 📝 **Commit Messages**: Clear and descriptive
+- 🧪 **Testing**: Test thoroughly before PR
+- 📚 **Documentation**: Update README if needed
+- 🔍 **Review**: Respond to review comments
+
+### 💡 Contribution Ideas
+
+- 🐛 Bug fixes
+- ✨ New features  
+- 📖 Documentation improvements
+- 🎨 UI/UX enhancements
+- 🔧 Performance optimizations
+
+## 📧 Support & Community
+
+| Hỗ trợ | Link | Mô tả |
+|--------|------|-------|
+| 🐛 **Issues** | [GitHub Issues](https://github.com/username/bot-news-tele/issues) | Bug reports, feature requests |
+| 💬 **Discussions** | [GitHub Discussions](https://github.com/username/bot-news-tele/discussions) | Q&A, ideas, general chat |
+| 📖 **Wiki** | [GitHub Wiki](https://github.com/username/bot-news-tele/wiki) | Detailed guides |
+| ⭐ **Star us** | [GitHub Star](https://github.com/username/bot-news-tele) | Show your support! |
+
+## 📄 License
+
+**MIT License** - Sử dụng tự do cho cả mục đích thương mại và cá nhân.
+
+---
+
+<div align="center">
+
+### 🌟 Nếu project này hữu ích, hãy cho chúng tôi 1 star! ⭐
+
+**Made with ❤️ by Vietnamese Developers**
+
+</div>
