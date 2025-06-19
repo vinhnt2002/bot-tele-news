@@ -5,7 +5,7 @@
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/username/bot-news-tele.svg)](https://github.com/username/bot-news-tele/stargazers)
 
-> 🚀 Bot tự động theo dõi tài khoản Twitter và thông báo lên Telegram khi có bài viết mới với format tin tức chuyên nghiệp.
+> 🚀 Bot tự động theo dõi tài khoản Twitter và thông báo lên Telegram khi có bài viết mới với format tin tức chuyên nghiệp
 
 ## ✨ Tính năng
 
