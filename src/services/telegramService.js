@@ -264,8 +264,6 @@ ${isAdmin ? `🔧 *LỆNH QUẢN TRỊ (Chỉ Admin):*
         return;
       }
 
-      this.bot.sendMessage(chatId, `⏳ Đang thêm @${username}...`);
-
       const result = await twitterService.addUserToTrack(username);
       
       if (result.success) {

@@ -77,6 +77,10 @@ const twitterUserSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+  lastCheckTime: {
+    type: Date,
+    default: null
+  },
   // Metadata
   createdAt: {
     type: Date,

@@ -10,18 +10,55 @@ class TwitterService {
   constructor() {
     this.apiKey = process.env.TWITTER_API_KEY;
     this.baseURL = 'https://api.twitterapi.io';
-    this.isMockMode = !this.apiKey || this.apiKey === 'temp_key_for_testing';
     
     // Rate limiting: TwitterAPI.io supports up to 200 QPS per client
     this.lastRequestTime = 0;
     this.minRequestInterval = 1000 / 150; // 150 requests per second to be safe
     
-    if (this.isMockMode) {
-      logger.warn('🧪 Twitter Service chạy ở chế độ Mock (không có API key thật)');
-    } else {
-      logger.info('🚀 Twitter Service initialized with TwitterAPI.io');
-      logger.info('📊 Rate limit: 150 requests/second');
+    if (!this.apiKey) {
+      logger.error('❌ Không có API key! Vui lòng thêm TWITTER_API_KEY vào file .env');
+      throw new Error('Missing TWITTER_API_KEY');
     }
+    
+    logger.info('🚀 Twitter Service initialized with TwitterAPI.io');
+    logger.info('📊 Rate limit: 150 requests/second');
+  }
+
+  // Helper function để convert thời gian Vietnam (UTC+7) sang UTC cho API
+  convertVietnamToUTC(vietnamTime) {
+    // Nếu input là Date object
+    if (vietnamTime instanceof Date) {
+      // Chuyển về UTC bằng cách trừ 7 giờ
+      return new Date(vietnamTime.getTime() - 7 * 60 * 60 * 1000);
+    }
+    
+    // Nếu input là timestamp
+    if (typeof vietnamTime === 'number') {
+      return new Date(vietnamTime - 7 * 60 * 60 * 1000);
+    }
+    
+    // Fallback
+    return vietnamTime;
+  }
+
+  // Helper function để lấy thời gian hiện tại theo Vietnam timezone
+  getVietnamNow() {
+    // Lấy thời gian hiện tại và cộng 7 giờ để có được Vietnam time
+    const utcNow = new Date();
+    const vietnamNow = new Date(utcNow.getTime() + 7 * 60 * 60 * 1000);
+    return vietnamNow;
+  }
+
+  // Helper function để format timestamp cho TwitterAPI.io (luôn là UTC)
+  formatTimestampForAPI(date) {
+    // TwitterAPI.io expects UTC time in format: YYYY-MM-DD_HH:MM:SS_UTC
+    const year = date.getUTCFullYear();
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(date.getUTCDate()).padStart(2, '0');
+    const hours = String(date.getUTCHours()).padStart(2, '0');
+    const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+    const seconds = String(date.getUTCSeconds()).padStart(2, '0');
+    return `${year}-${month}-${day}_${hours}:${minutes}:${seconds}_UTC`;
   }
 
   // Rate limiting helper
@@ -94,34 +131,9 @@ class TwitterService {
     }
   }
 
-  // Mock data cho testing
-  getMockUserData(username) {
-    return {
-      id: `mock_${username}_${Date.now()}`,
-      name: username.charAt(0).toUpperCase() + username.slice(1),
-      userName: username,
-      type: "user",
-      profilePicture: `https://abs.twimg.com/sticky/default_profile_images/default_profile_normal.png`,
-      followers: Math.floor(Math.random() * 1000),
-      following: Math.floor(Math.random() * 500),
-      statusesCount: Math.floor(Math.random() * 10000),
-      isBlueVerified: Math.random() > 0.8,
-      isVerified: Math.random() > 0.9,
-      description: `Mock bio for ${username}. This is a test account for bot development.`,
-      location: "Mock Location",
-      url: `https://example.com/${username}`,
-      createdAt: new Date(Date.now() - Math.random() * 365 * 24 * 60 * 60 * 1000).toISOString()
-    };
-  }
-
   // Lấy thông tin user Twitter bằng username
   async getUserByUsername(username) {
     try {
-      if (this.isMockMode) {
-        logger.info(`🧪 Mock mode: Creating fake user data for ${username}`);
-        return this.getMockUserData(username);
-      }
-
       const result = await this.makeAPIRequest('/twitter/user/info', {
         userName: username
       });
@@ -141,35 +153,29 @@ class TwitterService {
   // Lấy tweets mới của user sử dụng Advanced Search
   async getUserTweetsSince(username, sinceTimestamp = null) {
     try {
-      // Calculate since timestamp
-      let since = sinceTimestamp;
-      if (!since) {
-        // Default: get tweets from last 24 hours for initial check
-        since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      // Calculate since timestamp - sử dụng Vietnam timezone
+      let vietnamSince = sinceTimestamp;
+      if (!vietnamSince) {
+        // Default: get tweets from last 30 minutes theo Vietnam time thay vì 24h
+        const vietnamNow = this.getVietnamNow();
+        vietnamSince = new Date(vietnamNow.getTime() - 30 * 60 * 1000); // 30 phút
       }
       
+      // Convert Vietnam time to UTC for API call
+      const utcSince = this.convertVietnamToUTC(vietnamSince);
+      
       // Format timestamp for TwitterAPI.io: YYYY-MM-DD_HH:MM:SS_UTC
-      const year = since.getUTCFullYear();
-      const month = String(since.getUTCMonth() + 1).padStart(2, '0');
-      const day = String(since.getUTCDate()).padStart(2, '0');
-      const hours = String(since.getUTCHours()).padStart(2, '0');
-      const minutes = String(since.getUTCMinutes()).padStart(2, '0');
-      const seconds = String(since.getUTCSeconds()).padStart(2, '0');
-      const sinceFormatted = `${year}-${month}-${day}_${hours}:${minutes}:${seconds}_UTC`;
+      const sinceFormatted = this.formatTimestampForAPI(utcSince);
       
       // Build advanced search query
       const query = `from:${username} since:${sinceFormatted}`;
       
-      logger.info(`🔍 Advanced Search for ${username} since ${since.toISOString()}`, { 
+      logger.info(`🔍 Advanced Search for ${username} since Vietnam time ${vietnamSince.toISOString()}`, { 
         query: query,
-        sinceTimestamp: since.toISOString()
+        vietnamTime: vietnamSince.toISOString(),
+        utcTime: utcSince.toISOString(),
+        formattedForAPI: sinceFormatted
       });
-
-      // Mock mode cho testing
-      if (this.isMockMode) {
-        logger.info(`🧪 Mock mode: No new tweets for user ${username} since ${since.toISOString()}`);
-        return { tweets: [], status: 'success', method: 'advanced_search' };
-      }
 
       // Use Advanced Search API endpoint
       logger.info(`🔍 Making Advanced Search API call with query: "${query}"`);
@@ -188,17 +194,22 @@ class TwitterService {
       if (result.success) {
         const tweets = result.data?.tweets || [];
         
-        // Filter tweets to only include ones after sinceTimestamp
+        // Filter tweets to only include ones after UTC sinceTimestamp
+        // Convert vietnamSince to UTC for proper comparison
+        const utcSinceTime = this.convertVietnamToUTC(vietnamSince);
+        
         const filteredTweets = tweets.filter(tweet => {
           const tweetTime = new Date(tweet.createdAt).getTime();
-          const sinceTime = since.getTime();
-          return tweetTime > sinceTime;
+          const utcSinceTimeMs = utcSinceTime.getTime();
+          return tweetTime > utcSinceTimeMs;
         });
         
         logger.info(`📊 Advanced Search response for ${username}:`, {
           tweetsFound: tweets.length,
           tweetsAfterFilter: filteredTweets.length,
-          method: 'advanced_search'
+          method: 'advanced_search',
+          vietnamSinceTime: vietnamSince.toISOString(),
+          utcSinceTime: utcSinceTime.toISOString()
         });
 
         return {
@@ -224,8 +235,9 @@ class TwitterService {
   // Check tweets mới cho tất cả users
   async checkNewTweets() {
     try {
-      const cycleStartTime = new Date().toISOString();
-      logger.info(`🚀 Starting tweet check cycle at ${cycleStartTime}`);
+      const vietnamNow = this.getVietnamNow();
+      const cycleStartTime = vietnamNow.toISOString();
+      logger.info(`🚀 Starting tweet check cycle at Vietnam time ${cycleStartTime}`);
       
       const users = await this.getTrackedUsers();
       logger.info(`👥 Found ${users.length} users to check`);
@@ -245,26 +257,36 @@ class TwitterService {
         logger.info(`👤 Checking user ${i + 1}/${users.length}: ${user.username}`);
 
         try {
-          // Calculate since timestamp from lastTweetId or last check time
+          // Calculate since timestamp from lastCheckTime hoặc lastTweetId
           let sinceTimestamp = null;
           
-          if (user.lastTweetId) {
-            // Get timestamp of last tweet we processed
+          // Ưu tiên sử dụng lastCheckTime để tránh miss tweets
+          if (user.lastCheckTime) {
+            sinceTimestamp = new Date(user.lastCheckTime.getTime() - 60 * 1000); // Trừ 1 phút để tránh miss
+            logger.info(`📌 Using lastCheckTime (Vietnam): ${sinceTimestamp.toISOString()}`);
+          }
+          else if (user.lastTweetId) {
+            // Fallback: Get timestamp of last tweet we processed
             const lastTweet = await Tweet.findOne({ 
               tweetId: user.lastTweetId 
             }).sort({ createdAt: -1 });
             
             if (lastTweet) {
               sinceTimestamp = new Date(lastTweet.createdAt.getTime() + 1000); // Add 1 second to avoid duplicates
-              logger.info(`📌 Using lastTweetId timestamp: ${sinceTimestamp.toISOString()}`);
+              logger.info(`📌 Using lastTweetId timestamp (Vietnam): ${sinceTimestamp.toISOString()}`);
             }
           }
           
           if (!sinceTimestamp) {
-            // No lastTweetId, use 24 hours ago for safety
-            sinceTimestamp = new Date(Date.now() - 24 * 60 * 60 * 1000);
-            logger.info(`📅 Using 24h fallback timestamp: ${sinceTimestamp.toISOString()}`);
+            // No lastCheckTime or lastTweetId, chỉ lấy 30 phút gần nhất
+            const vietnamNow = this.getVietnamNow();
+            sinceTimestamp = new Date(vietnamNow.getTime() - 30 * 60 * 1000); // 30 phút
+            logger.info(`📅 Using 30min fallback Vietnam timestamp: ${sinceTimestamp.toISOString()}`);
           }
+
+          // Update lastCheckTime trước khi check
+          user.lastCheckTime = this.getVietnamNow();
+          await user.save();
 
           // Use Advanced Search
           const tweetsData = await this.getUserTweetsSince(user.username, sinceTimestamp);
@@ -337,7 +359,7 @@ class TwitterService {
       }
 
       logger.info(`🏁 Check cycle completed:`, {
-        cycleEndTime: new Date().toISOString(),
+        cycleEndTime: this.getVietnamNow().toISOString(),
         usersChecked: users.length,
         newTweetsFound: totalNewTweets
       });
@@ -393,10 +415,9 @@ class TwitterService {
       await newUser.save();
       logger.info(`Đã thêm user ${username} vào danh sách theo dõi`);
       
-      const mockWarning = this.isMockMode ? ' (Mock Mode)' : '';
       return { 
         success: true, 
-        message: `Đã thêm ${twitterUser.name} (@${username}) vào danh sách theo dõi!${mockWarning}` 
+        message: `Đã thêm ${twitterUser.name} (@${username}) vào danh sách theo dõi!` 
       };
     } catch (error) {
       logger.error(`Lỗi thêm user ${username}:`, error.message);
@@ -474,11 +495,6 @@ class TwitterService {
   // Advanced search tweets
   async searchTweets(query, options = {}) {
     try {
-      if (this.isMockMode) {
-        logger.info(`🧪 Mock mode: No search results for query "${query}"`);
-        return { tweets: [] };
-      }
-
       const params = {
         query: query,
         ...options
@@ -510,11 +526,6 @@ class TwitterService {
   // Get user followers
   async getUserFollowers(username, cursor = null) {
     try {
-      if (this.isMockMode) {
-        logger.info(`🧪 Mock mode: No followers for user ${username}`);
-        return { users: [] };
-      }
-
       const params = { userName: username };
       if (cursor) params.cursor = cursor;
 
@@ -544,11 +555,6 @@ class TwitterService {
   // Get tweets by IDs
   async getTweetsByIds(tweetIds) {
     try {
-      if (this.isMockMode) {
-        logger.info(`🧪 Mock mode: No tweets for IDs ${tweetIds.join(', ')}`);
-        return { tweets: [] };
-      }
-
       const params = {
         ids: Array.isArray(tweetIds) ? tweetIds.join(',') : tweetIds
       };
@@ -579,11 +585,6 @@ class TwitterService {
     try {
       logger.info(`🔧 DEBUG: Testing API directly for ${username}`);
       
-      if (this.isMockMode) {
-        logger.warn('🧪 Cannot debug in mock mode!');
-        return { error: 'Mock mode enabled' };
-      }
-
       const result = await this.makeAPIRequest('/twitter/user/last_tweets', {
         userName: username
       });
@@ -603,4 +604,4 @@ class TwitterService {
   }
 }
 
-module.exports = new TwitterService(); 
+module.exports = new TwitterService();
