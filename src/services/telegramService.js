@@ -2,16 +2,94 @@ const TelegramBot = require('node-telegram-bot-api');
 const logger = require('../../utils/logger');
 const twitterService = require('./twitterService');
 const moment = require('moment');
+const { HttpsProxyAgent } = require('https-proxy-agent');
 
 class TelegramService {
   constructor() {
-    this.bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { polling: true });
+    // 🚀 PROXY SUPPORT: Check if proxy is needed
+    const proxyUrl = process.env.TELEGRAM_PROXY_URL;
+    const botOptions = { polling: true };
+    
+    if (proxyUrl) {
+      logger.info(`🌐 Using proxy for Telegram: ${proxyUrl}`);
+      botOptions.request = {
+        agent: new HttpsProxyAgent(proxyUrl)
+      };
+    }
+    
+    // Enhanced polling configuration with error handling
+    botOptions.polling = {
+      interval: 300,  // 300ms between polling requests
+      autoStart: true,
+      params: {
+        timeout: 10,  // 10 seconds timeout for long polling
+      }
+    };
+    
+    this.bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, botOptions);
     this.chatId = process.env.TELEGRAM_CHAT_ID;
     
     // Danh sách admin được phép sử dụng các lệnh quản lý
     this.adminUsers = this.parseAdminUsers(process.env.TELEGRAM_ADMIN_IDS);
     
+    // Setup error handlers
+    this.setupErrorHandlers();
     this.setupCommands();
+  }
+
+  // NEW: Setup error handlers for polling issues
+  setupErrorHandlers() {
+    // Handle polling errors
+    this.bot.on('polling_error', (error) => {
+      logger.error('🚫 Telegram polling error:', {
+        code: error.code,
+        message: error.message,
+        timestamp: new Date().toISOString()
+      });
+      
+      // Handle specific error types
+      if (error.code === 'EFATAL') {
+        logger.warn('💀 Fatal Telegram error - attempting to restart polling in 30s...');
+        setTimeout(() => {
+          this.restartPolling();
+        }, 30000);
+      } else if (error.code === 'ETIMEDOUT') {
+        logger.warn('⏱️ Telegram connection timeout - will retry automatically');
+        // Don't restart immediately for timeout, let it retry naturally
+      } else if (error.code === 'ENOTFOUND') {
+        logger.error('🌐 Network issue - check internet connection and proxy settings');
+      }
+    });
+
+    // Handle webhook errors
+    this.bot.on('webhook_error', (error) => {
+      logger.error('🔗 Telegram webhook error:', error.message);
+    });
+  }
+
+  // NEW: Restart polling with backoff
+  async restartPolling() {
+    try {
+      logger.info('🔄 Attempting to restart Telegram polling...');
+      
+      // Stop current polling
+      await this.bot.stopPolling();
+      
+      // Wait a bit
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      
+      // Start polling again
+      await this.bot.startPolling();
+      
+      logger.info('✅ Telegram polling restarted successfully');
+    } catch (error) {
+      logger.error('❌ Failed to restart polling:', error.message);
+      
+      // Try again in 60 seconds
+      setTimeout(() => {
+        this.restartPolling();
+      }, 60000);
+    }
   }
 
   // Parse danh sách admin IDs từ environment variable
