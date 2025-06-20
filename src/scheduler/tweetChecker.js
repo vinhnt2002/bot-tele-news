@@ -7,19 +7,14 @@ class TweetChecker {
   constructor() {
     this.telegramService = null;
     this.isRunning = false;
-    this.useAdvancedSearch = true; // Always enable Advanced Search
-    this.lastAdvancedRunTime = 0; // Track last successful run
-    this.advancedRunInterval = 2 * 60 * 1000; // Run Advanced Search every 2 minutes (FOR TESTING)
   }
 
-  // FIXED: Khởi động scheduler với smart intervals
+  // Khởi động scheduler
   start() {
-    // CHANGED: Chạy mỗi 1 phút để check nhanh, nhưng smart filtering sẽ quyết định users nào cần check
-    const checkInterval = 1; // Check mỗi 1 phút
+    const checkInterval = process.env.CHECK_INTERVAL_MINUTES || 5;
     const cronExpression = `*/${checkInterval} * * * *`;
 
-    logger.info(`🚀 Smart scheduler started: Check every ${checkInterval} minute(s) with intelligent filtering`);
-    logger.info(`🎯 Users will be checked based on their activity patterns (5min/15min/1h/6h)`);
+    logger.info(`🚀 Tweet checker started: Check every ${checkInterval} minute(s)`);
 
     cron.schedule(cronExpression, async () => {
       if (this.isRunning) {
@@ -43,52 +38,16 @@ class TweetChecker {
     this.telegramService = telegramService;
   }
 
-  // IMPROVED: Kiểm tra và đăng tweets mới với smart filtering và forced Advanced Search
+  // Kiểm tra và đăng tweets mới
   async checkAndPostNewTweets() {
     try {
-      logger.info('🔍 Smart check cycle started...');
+      logger.info('🔍 Starting tweet check cycle...');
       
-      let result;
-      const now = Date.now();
-      const timeSinceLastAdvancedRun = now - this.lastAdvancedRunTime;
-      const shouldRunAdvanced = timeSinceLastAdvancedRun >= this.advancedRunInterval;
-      
-      if (shouldRunAdvanced) {
-        logger.info(`🚀 Running FORCED Advanced Search check (${Math.floor(timeSinceLastAdvancedRun/60000)}min since last run)`);
-        
-        // Set a flag to force-run Advanced Search regardless of intervals
-        twitterService.forceAdvancedSearch = true;
-        
-        // 🚀 Use Advanced Search method (force run)
-        result = await twitterService.checkNewTweetsOptimized();
-        
-        // Reset flag and update last run time
-        twitterService.forceAdvancedSearch = false;
-        this.lastAdvancedRunTime = now;
-        logger.info(`✅ Completed forced Advanced Search run`);
-      } else {
-        // Regular optimized check with smart intervals
-        result = await twitterService.checkNewTweetsOptimized();
-      }
-
-      // Handle different return formats
-      let newTweets = [];
-      if (Array.isArray(result)) {
-        // Old format returns array directly
-        newTweets = result;
-             } else if (result && result.success) {
-         // New format returns object with success flag
-         newTweets = result.newTweets || result.tweets || [];
-         if (result.message) {
-           logger.info(`📊 ${result.message}`);
-         }
-      } else if (result && typeof result === 'object') {
-        // Handle other object formats
-        newTweets = result.tweets || result.newTweets || [];
-      }
+      // Sử dụng method checkNewTweets đã được cleanup
+      const newTweets = await twitterService.checkNewTweets();
 
       if (!Array.isArray(newTweets) || newTweets.length === 0) {
-        logger.info('📭 No new tweets found (smart optimization working)');
+        logger.info('📭 No new tweets found');
         return;
       }
 
@@ -107,12 +66,12 @@ class TweetChecker {
       logger.info(`✅ Sent ${newTweets.length} tweets to Telegram`);
 
     } catch (error) {
-      logger.error('❌ Error during smart check:', error.message);
+      logger.error('❌ Error during tweet check:', error.message);
       
       // Gửi thông báo lỗi nếu có Telegram service
       if (this.telegramService) {
         await this.telegramService.sendSystemMessage(
-          `⚠️ Smart check error: ${error.message}`
+          `⚠️ Tweet check error: ${error.message}`
         );
       }
     }
@@ -128,26 +87,12 @@ class TweetChecker {
     try {
       logger.info('🔧 Manual check triggered');
       
-      // Enable force flag for Advanced Search
-      twitterService.forceAdvancedSearch = true;
+      // Sử dụng method checkNewTweets đã được cleanup
+      const newTweets = await twitterService.checkNewTweets();
       
-      // 🚀 Use Advanced Search method for manual check
-      const result = await twitterService.checkNewTweetsOptimized();
-      
-      // Reset force flag
-      twitterService.forceAdvancedSearch = false;
-      
-      // Update last run time
-      this.lastAdvancedRunTime = Date.now();
-
-      // Handle different return formats for manual check
-      let newTweets = [];
-      if (Array.isArray(result)) {
-        newTweets = result;
-             } else if (result && result.success) {
-         newTweets = result.newTweets || result.tweets || [];
-       } else if (result && typeof result === 'object') {
-        newTweets = result.tweets || result.newTweets || [];
+      if (!Array.isArray(newTweets)) {
+        this.isRunning = false;
+        return { success: false, message: 'Invalid response from Twitter service' };
       }
       
       for (const tweet of newTweets) {
