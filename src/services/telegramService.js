@@ -189,23 +189,6 @@ ${isAdmin ? `🔧 *LỆNH QUẢN TRỊ (Chỉ Admin):*
 🔄 \`/update username\` - Cập nhật profile mới nhất
 ⚡ \`/check\` - Force check tweets ngay lập tức
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-📝 *VÍ DỤ SỬ DỤNG:*
-\`/add elonmusk\`        → Thêm Elon Musk vào theo dõi
-\`/info elonmusk\`       → Xem profile chi tiết + avatar
-\`/check\`               → Kiểm tra tweets tất cả users
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-⚙️ *THÔNG TIN KỸ THUẬT:*
-🔄 Tự động: Bot check tweets mỗi ${process.env.CHECK_INTERVAL_MINUTES || 5} phút
-📱 Username: Nhập không cần @ (elonmusk, không phải @elonmusk)  
-🌍 Hỗ trợ: Chỉ tài khoản Twitter public
-💾 Lưu trữ: Full profile + media + text + stats tweets
-🚫 Chống spam: Không gửi lại tweets cũ
-🔵 Verification: Hiển thị blue check & legacy verification
-🖼️ Media: Hỗ trợ ảnh, video, GIF trong tweets
         `;
         
         this.bot.sendMessage(chatId, adminHelpMessage, { parse_mode: 'Markdown' });
@@ -223,24 +206,6 @@ ${isAdmin ? `🔧 *LỆNH QUẢN TRỊ (Chỉ Admin):*
 🔍 \`/info username\` - Chi tiết profile & stats user
 📊 \`/status\` - Trạng thái bot & thống kê  
 ❓ \`/help\` - Hướng dẫn này
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-📝 *VÍ DỤ SỬ DỤNG:*
-\`/list\`              → Xem tất cả users đang theo dõi
-\`/info elonmusk\`     → Chi tiết profile + avatar Elon Musk  
-\`/status\`            → Trạng thái bot + số liệu
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-⚙️ *TÍNH NĂNG CHÍNH:*
-🔄 **Tự động thông báo:** Tweets mới ngay khi có
-📱 **Username:** Nhập không cần @ (ví dụ: elonmusk)
-🔵 **Verification:** Hiển thị blue check & legacy verification  
-🖼️ **Media:** Hỗ trợ ảnh, video, GIF trong tweets
-🚫 **Chống spam:** Không gửi lại tweets cũ
-📊 **Full stats:** Retweets, likes, views, replies
-💾 **Profile đầy đủ:** Avatar, bio, followers, following
         `;
         
         this.bot.sendMessage(chatId, userHelpMessage, { parse_mode: 'Markdown' });
@@ -393,15 +358,28 @@ ${isAdmin ? '🔐 Quyền: **Admin**' : '👀 Quyền: **Chỉ xem**'}`;
         return;
       }
 
-      this.bot.sendMessage(chatId, `⏳ Đang lấy thông tin @${username}...`);
+      this.bot.sendMessage(chatId, `⏳ Đang lấy thông tin mới nhất từ @${username}...`);
 
       try {
         const TwitterUser = require('../models/TwitterUser');
-        const user = await TwitterUser.findOne({ username: username.toLowerCase() });
+        let user = await TwitterUser.findOne({ username: username.toLowerCase() });
 
         if (!user) {
           this.bot.sendMessage(chatId, `❌ Không tìm thấy @${username} trong danh sách theo dõi!\nSử dụng \`/add ${username}\` để thêm user này.`, { parse_mode: 'Markdown' });
           return;
+        }
+
+        // Cập nhật thông tin profile mới nhất từ Twitter API
+        logger.info(`🔄 Updating profile for @${username} before showing info`);
+        const updateResult = await twitterService.updateUserProfile(username);
+        
+        if (updateResult.success) {
+          // Lấy lại user sau khi đã cập nhật
+          user = await TwitterUser.findOne({ username: username.toLowerCase() });
+          logger.info(`✅ Successfully updated profile for @${username}`);
+        } else {
+          logger.warn(`⚠️ Failed to update profile for @${username}, showing cached data: ${updateResult.message}`);
+          // Vẫn hiển thị thông tin cũ nếu không cập nhật được
         }
 
         // Format thông tin user
@@ -424,6 +402,7 @@ ${isAdmin ? '🔐 Quyền: **Admin**' : '👀 Quyền: **Chỉ xem**'}`;
 📝 Tweets: ${(user.statusesCount || 0).toLocaleString()}
 
 🔄 **Cập nhật cuối:** ${lastUpdate}
+${updateResult.success ? '✅ *Vừa cập nhật từ Twitter API*' : '⚠️ *Hiển thị thông tin từ cache*'}
         `;
 
         // Gửi ảnh đại diện nếu có
