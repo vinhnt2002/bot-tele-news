@@ -11,10 +11,10 @@ class TweetChecker {
 
   // Khởi động scheduler
   start() {
-    const interval = process.env.CHECK_INTERVAL_MINUTES || 5;
-    const cronExpression = `*/${interval} * * * *`; // Chạy mỗi X phút
+    const checkInterval = process.env.CHECK_INTERVAL_MINUTES || 5;
+    const cronExpression = `*/${checkInterval} * * * *`;
 
-    logger.info(`Bắt đầu theo dõi tweets, kiểm tra mỗi ${interval} phút`);
+    logger.info(`🚀 Tweet checker started: Check every ${checkInterval} minute(s)`);
 
     cron.schedule(cronExpression, async () => {
       if (this.isRunning) {
@@ -41,16 +41,17 @@ class TweetChecker {
   // Kiểm tra và đăng tweets mới
   async checkAndPostNewTweets() {
     try {
-      logger.info('Bắt đầu kiểm tra tweets mới...');
-
+      logger.info('🔍 Starting tweet check cycle...');
+      
+      // Sử dụng method checkNewTweets đã được cleanup
       const newTweets = await twitterService.checkNewTweets();
 
-      if (newTweets.length === 0) {
-        logger.info('Không có tweets mới');
+      if (!Array.isArray(newTweets) || newTweets.length === 0) {
+        logger.info('📭 No new tweets found');
         return;
       }
 
-      logger.info(`Tìm thấy ${newTweets.length} tweets mới`);
+      logger.info(`🎉 Found ${newTweets.length} new tweets!`);
 
       // Gửi từng tweet lên Telegram
       for (const tweet of newTweets) {
@@ -62,15 +63,15 @@ class TweetChecker {
         }
       }
 
-      logger.info(`Đã gửi ${newTweets.length} tweets lên Telegram`);
+      logger.info(`✅ Sent ${newTweets.length} tweets to Telegram`);
 
     } catch (error) {
-      logger.error('Lỗi khi kiểm tra tweets mới:', error.message);
+      logger.error('❌ Error during tweet check:', error.message);
       
       // Gửi thông báo lỗi nếu có Telegram service
       if (this.telegramService) {
         await this.telegramService.sendSystemMessage(
-          `⚠️ Lỗi khi kiểm tra tweets: ${error.message}`
+          `⚠️ Tweet check error: ${error.message}`
         );
       }
     }
@@ -84,7 +85,15 @@ class TweetChecker {
 
     this.isRunning = true;
     try {
+      logger.info('🔧 Manual check triggered');
+      
+      // Sử dụng method checkNewTweets đã được cleanup
       const newTweets = await twitterService.checkNewTweets();
+      
+      if (!Array.isArray(newTweets)) {
+        this.isRunning = false;
+        return { success: false, message: 'Invalid response from Twitter service' };
+      }
       
       for (const tweet of newTweets) {
         if (this.telegramService) {
@@ -96,12 +105,12 @@ class TweetChecker {
       this.isRunning = false;
       return { 
         success: true, 
-        message: `Đã kiểm tra và gửi ${newTweets.length} tweets mới` 
+        message: `✅ Manual check completed: ${newTweets.length} new tweets sent` 
       };
     } catch (error) {
       this.isRunning = false;
-      logger.error('Lỗi manual check:', error.message);
-      return { success: false, message: `Lỗi: ${error.message}` };
+      logger.error('❌ Manual check error:', error.message);
+      return { success: false, message: `❌ Error: ${error.message}` };
     }
   }
 }

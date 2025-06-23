@@ -10,153 +10,55 @@ class TwitterService {
   constructor() {
     this.apiKey = process.env.TWITTER_API_KEY;
     this.baseURL = 'https://api.twitterapi.io';
-    this.isMockMode = !this.apiKey || this.apiKey === 'temp_key_for_testing';
     
     // Rate limiting: TwitterAPI.io supports up to 200 QPS per client
     this.lastRequestTime = 0;
     this.minRequestInterval = 1000 / 150; // 150 requests per second to be safe
     
-    // Usage tracking for cost estimation
-    this.usageStats = {
-      tweets: 0,        // $0.15/1k tweets
-      userProfiles: 0,  // $0.18/1k user profiles  
-      followers: 0,     // $0.15/1k followers
-      requests: 0,      // $0.00015 per request minimum
-      savedByOptimization: 0 // Track API calls saved
-    };
-
-    // PRACTICAL OPTIMIZATION: Simple user activity tracking
-    this.userActivity = new Map(); // username -> { lastTweetTime, emptyChecks, interval }
-    
-    // PRACTICAL OPTIMIZATION: Simple cache with TTL
-    this.cache = new Map(); // key -> { data, expiry }
-    
-    // PRACTICAL OPTIMIZATION: Dynamic intervals based on activity
-    this.intervals = {
-      active: 5 * 60 * 1000,      // 5 phút cho users có tweets
-      normal: 15 * 60 * 1000,     // 15 phút cho users bình thường  
-      inactive: 60 * 60 * 1000,   // 1 giờ cho users không hoạt động
-      dead: 6 * 60 * 60 * 1000    // 6 giờ cho users "chết"
-    };
-    
-    if (this.isMockMode) {
-      logger.warn('🧪 Twitter Service chạy ở chế độ Mock (không có API key thật)');
-    } else {
-      logger.info('🚀 Twitter Service initialized with TwitterAPI.io + Smart Optimization');
-      logger.info('📊 Rate limit: 150 requests/second, Average response: ~700ms');
-      logger.info('💰 Pricing: $0.15/1k tweets, $0.18/1k profiles, $0.15/1k followers');
-      logger.info('🎯 Optimization: Smart intervals, caching, empty check detection');
-    }
-  }
-
-  // PRACTICAL OPTIMIZATION: Simple cache helpers
-  setCache(key, data, ttlMinutes = 10) {
-    const expiry = Date.now() + (ttlMinutes * 60 * 1000);
-    this.cache.set(key, { data, expiry });
-  }
-
-  getCache(key) {
-    const cached = this.cache.get(key);
-    if (!cached) return null;
-    
-    if (Date.now() > cached.expiry) {
-      this.cache.delete(key);
-      return null;
+    if (!this.apiKey) {
+      logger.error('❌ Không có API key! Vui lòng thêm TWITTER_API_KEY vào file .env');
+      throw new Error('Missing TWITTER_API_KEY');
     }
     
-    this.usageStats.savedByOptimization++;
-    return cached.data;
+    logger.info('🚀 Twitter Service initialized with TwitterAPI.io');
+    logger.info('📊 Rate limit: 150 requests/second');
   }
 
-  // PRACTICAL OPTIMIZATION: Update user activity và tính toán interval
-  updateUserActivity(username, tweets = []) {
-    const now = Date.now();
-    const activity = this.userActivity.get(username) || {
-      lastTweetTime: 0,
-      emptyChecks: 0,
-      interval: this.intervals.normal,
-      lastCheckTime: 0
-    };
-
-    if (tweets.length > 0) {
-      // User có tweets mới
-      const latestTweet = tweets[0];
-      const tweetTime = new Date(latestTweet.createdAt).getTime();
-      
-      activity.lastTweetTime = tweetTime;
-      activity.emptyChecks = 0;
-      
-      // Tính toán interval dựa trên activity
-      const hoursSinceLastTweet = (now - tweetTime) / (1000 * 60 * 60);
-      
-      if (hoursSinceLastTweet < 4) {
-        activity.interval = this.intervals.active; // Very active
-      } else if (hoursSinceLastTweet < 24) {
-        activity.interval = this.intervals.normal; // Normal activity
-      } else {
-        activity.interval = this.intervals.inactive; // Low activity
-      }
-      
-    } else {
-      // Empty check
-      activity.emptyChecks++;
-      
-      // Tăng interval nếu quá nhiều empty checks
-      if (activity.emptyChecks >= 3) {
-        activity.interval = this.intervals.inactive;
-      }
-      if (activity.emptyChecks >= 8) {
-        activity.interval = this.intervals.dead;
-      }
-    }
-
-    activity.lastCheckTime = now;
-    this.userActivity.set(username, activity);
-    
-    logger.debug(`📊 ${username}: interval=${Math.floor(activity.interval/60000)}min, empty=${activity.emptyChecks}`);
-  }
-
-  // PRACTICAL OPTIMIZATION: Check if user should be checked now
-  shouldCheckUser(username) {
-    const activity = this.userActivity.get(username);
-    if (!activity) return true; // First time checking
-    
-    const timeSinceLastCheck = Date.now() - activity.lastCheckTime;
-    const shouldCheck = timeSinceLastCheck >= activity.interval;
-    
-    if (!shouldCheck) {
-      this.usageStats.savedByOptimization++;
-      logger.debug(`⏰ Skip ${username} (${Math.floor(timeSinceLastCheck/60000)}/${Math.floor(activity.interval/60000)} min)`);
+  // Helper function để convert thời gian Vietnam (UTC+7) sang UTC cho API
+  convertVietnamToUTC(vietnamTime) {
+    // Nếu input là Date object
+    if (vietnamTime instanceof Date) {
+      // Chuyển về UTC bằng cách trừ 7 giờ
+      return new Date(vietnamTime.getTime() - 7 * 60 * 60 * 1000);
     }
     
-    return shouldCheck;
+    // Nếu input là timestamp
+    if (typeof vietnamTime === 'number') {
+      return new Date(vietnamTime - 7 * 60 * 60 * 1000);
+    }
+    
+    // Fallback
+    return vietnamTime;
   }
 
-  // Track usage and estimate costs
-  trackUsage(type, count = 1) {
-    this.usageStats[type] += count;
-    this.usageStats.requests += 1;
+  // Helper function để lấy thời gian hiện tại theo Vietnam timezone
+  getVietnamNow() {
+    // Lấy thời gian hiện tại và cộng 7 giờ để có được Vietnam time
+    const utcNow = new Date();
+    const vietnamNow = new Date(utcNow.getTime() + 7 * 60 * 60 * 1000);
+    return vietnamNow;
   }
 
-  // Get usage statistics and cost estimation
-  getUsageStats() {
-    const costs = {
-      tweets: (this.usageStats.tweets / 1000) * 0.15,
-      userProfiles: (this.usageStats.userProfiles / 1000) * 0.18,
-      followers: (this.usageStats.followers / 1000) * 0.15,
-      requests: this.usageStats.requests * 0.00015
-    };
-
-    const totalCost = Object.values(costs).reduce((sum, cost) => sum + cost, 0);
-    const savedCost = this.usageStats.savedByOptimization * 0.00015;
-
-    return {
-      usage: this.usageStats,
-      estimatedCosts: costs,
-      totalEstimatedCost: totalCost.toFixed(6),
-      savedCost: savedCost.toFixed(6),
-      currency: 'USD'
-    };
+  // Helper function để format timestamp cho TwitterAPI.io (luôn là UTC)
+  formatTimestampForAPI(date) {
+    // TwitterAPI.io expects UTC time in format: YYYY-MM-DD_HH:MM:SS_UTC
+    const year = date.getUTCFullYear();
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(date.getUTCDate()).padStart(2, '0');
+    const hours = String(date.getUTCHours()).padStart(2, '0');
+    const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+    const seconds = String(date.getUTCSeconds()).padStart(2, '0');
+    return `${year}-${month}-${day}_${hours}:${minutes}:${seconds}_UTC`;
   }
 
   // Rate limiting helper
@@ -173,7 +75,7 @@ class TwitterService {
     this.lastRequestTime = Date.now();
   }
 
-  // Enhanced API request with usage tracking
+  // API request wrapper
   async makeAPIRequest(endpoint, params = {}) {
     try {
       await this.enforceRateLimit();
@@ -186,26 +88,26 @@ class TwitterService {
           'Content-Type': 'application/json'
         },
         params: params,
-        timeout: 30000 // 30 second timeout
+        timeout: 30000
       });
 
       // Handle TwitterAPI.io response format
-      if (response.data.status === 'success') {
-        // Track usage based on endpoint
-        this.trackAPIUsage(endpoint, response.data.data);
-        
+      const isSuccessful = response.data.status === 'success' || 
+                           response.data.tweets !== undefined || 
+                           response.data.data !== undefined;
+      
+      if (isSuccessful) {
         return {
           success: true,
-          data: response.data.data,
-          has_next_page: response.data.has_next_page,
-          next_cursor: response.data.next_cursor
+          data: response.data.data || response.data,
+          has_next_page: response.data.has_next_page || false,
+          next_cursor: response.data.next_cursor || null
         };
       } else {
         logger.error('❌ TwitterAPI.io returned error status:', response.data);
-        return { success: false, error: response.data.msg || 'Unknown API error' };
+        return { success: false, error: response.data.msg || response.data.error || 'Unknown API error' };
       }
     } catch (error) {
-      // Enhanced error handling based on status codes
       const errorInfo = {
         message: error.message,
         status: error.response?.status,
@@ -229,59 +131,11 @@ class TwitterService {
     }
   }
 
-  // Track usage based on endpoint and response data
-  trackAPIUsage(endpoint, data) {
-    switch (endpoint) {
-      case '/twitter/user/last_tweets':
-      case '/twitter/search/advanced':
-      case '/twitter/tweets':
-        this.trackUsage('tweets', data?.tweets?.length || 0);
-        break;
-      case '/twitter/user/info':
-        this.trackUsage('userProfiles', 1);
-        break;
-      case '/twitter/user/followers':
-      case '/twitter/user/followings':
-        this.trackUsage('followers', data?.users?.length || 0);
-        break;
-      default:
-        // Just track as a request
-        this.trackUsage('requests', 0); // requests already tracked in trackUsage
-    }
-  }
-
-  // Mock data cho testing
-  getMockUserData(username) {
-    return {
-      id: `mock_${username}_${Date.now()}`,
-      name: username.charAt(0).toUpperCase() + username.slice(1),
-      userName: username,  // TwitterAPI.io sử dụng userName
-      type: "user",
-      profilePicture: `https://abs.twimg.com/sticky/default_profile_images/default_profile_normal.png`,
-      followers: Math.floor(Math.random() * 1000),
-      following: Math.floor(Math.random() * 500),
-      statusesCount: Math.floor(Math.random() * 10000),
-      isBlueVerified: Math.random() > 0.8, // 20% chance of blue verification
-      isVerified: Math.random() > 0.9, // 10% chance of legacy verification
-      description: `Mock bio for ${username}. This is a test account for bot development.`,
-      location: "Mock Location",
-      url: `https://example.com/${username}`,
-      createdAt: new Date(Date.now() - Math.random() * 365 * 24 * 60 * 60 * 1000).toISOString() // Random date within last year
-    };
-  }
-
-  // Lấy thông tin user Twitter bằng username - Updated according to TwitterAPI.io docs
+  // Lấy thông tin user Twitter bằng username
   async getUserByUsername(username) {
     try {
-      // Mock mode cho testing
-      if (this.isMockMode) {
-        logger.info(`🧪 Mock mode: Creating fake user data for ${username}`);
-        return this.getMockUserData(username);
-      }
-
-      // Sử dụng enhanced API request
       const result = await this.makeAPIRequest('/twitter/user/info', {
-        userName: username  // TwitterAPI.io sử dụng userName theo docs
+        userName: username
       });
 
       if (result.success) {
@@ -296,81 +150,234 @@ class TwitterService {
     }
   }
 
-  // Lấy tweets mới của user - Enhanced with smart caching
-  async getUserTweets(username, cursor = null) {
+  // Lấy tweets mới của user sử dụng Advanced Search
+  async getUserTweetsSince(username, sinceTimestamp = null) {
     try {
-      // PRACTICAL OPTIMIZATION: Check cache first (only for first page)
-      if (!cursor) {
-        const cacheKey = `tweets_${username}`;
-        const cached = this.getCache(cacheKey);
-        if (cached) {
-          logger.debug(`⚡ Cache hit for ${username} tweets`);
-          return { tweets: cached, status: 'success', fromCache: true };
-        }
+      // Calculate since timestamp - sử dụng Vietnam timezone
+      let vietnamSince = sinceTimestamp;
+      if (!vietnamSince) {
+        // Default: get tweets from last 30 minutes theo Vietnam time thay vì 24h
+        const vietnamNow = this.getVietnamNow();
+        vietnamSince = new Date(vietnamNow.getTime() - 30 * 60 * 1000); // 30 phút
       }
+      
+      // Convert Vietnam time to UTC for API call
+      const utcSince = this.convertVietnamToUTC(vietnamSince);
+      
+      // Format timestamp for TwitterAPI.io: YYYY-MM-DD_HH:MM:SS_UTC
+      const sinceFormatted = this.formatTimestampForAPI(utcSince);
+      
+      // Build advanced search query
+      const query = `from:${username} since:${sinceFormatted}`;
+      
+      logger.info(`🔍 Advanced Search for ${username} since Vietnam time ${vietnamSince.toISOString()}`, { 
+        query: query,
+        vietnamTime: vietnamSince.toISOString(),
+        utcTime: utcSince.toISOString(),
+        formattedForAPI: sinceFormatted
+      });
 
-      // Mock mode cho testing
-      if (this.isMockMode) {
-        logger.info(`🧪 Mock mode: No tweets for user ${username}`);
-        return { tweets: [] };
-      }
-
-      // Prepare parameters
-      const params = {
-        userName: username  // TwitterAPI.io sử dụng userName thống nhất
-      };
-
-      // Thêm cursor nếu có để phân trang
-      if (cursor) {
-        params.cursor = cursor;
-      }
-
-      logger.info(`🔍 Getting tweets for user ${username}`, { params });
-
-      // Sử dụng enhanced API request
-      const result = await this.makeAPIRequest('/twitter/user/last_tweets', params);
+      // Use Advanced Search API endpoint
+      logger.info(`🔍 Making Advanced Search API call with query: "${query}"`);
+      
+      const result = await this.makeAPIRequest('/twitter/tweet/advanced_search', {
+        query: query,
+        queryType: 'Latest'
+      });
+      
+      logger.info(`📡 Advanced Search API response:`, {
+        success: result.success,
+        dataExists: !!result.data,
+        tweetsCount: result.data?.tweets?.length || 0
+      });
 
       if (result.success) {
         const tweets = result.data?.tweets || [];
         
-        // PRACTICAL OPTIMIZATION: Cache results (only first page)
-        if (!cursor && tweets.length > 0) {
-          this.setCache(`tweets_${username}`, tweets, 8); // Cache 8 phút
-        }
+        // Filter tweets to only include ones after UTC sinceTimestamp
+        // Convert vietnamSince to UTC for proper comparison
+        const utcSinceTime = this.convertVietnamToUTC(vietnamSince);
         
-        logger.info(`📊 TwitterAPI response for ${username}:`, {
-          tweetsCount: tweets.length,
-          hasNextPage: result.has_next_page,
-          nextCursor: result.next_cursor ? 'available' : 'none',
-          fromCache: false
+        const filteredTweets = tweets.filter(tweet => {
+          const tweetTime = new Date(tweet.createdAt).getTime();
+          const utcSinceTimeMs = utcSinceTime.getTime();
+          return tweetTime > utcSinceTimeMs;
+        });
+        
+        logger.info(`📊 Advanced Search response for ${username}:`, {
+          tweetsFound: tweets.length,
+          tweetsAfterFilter: filteredTweets.length,
+          method: 'advanced_search',
+          vietnamSinceTime: vietnamSince.toISOString(),
+          utcSinceTime: utcSinceTime.toISOString()
         });
 
-        // DEBUG: Log từng tweet để debug (chỉ trong debug mode)
-        if (process.env.NODE_ENV === 'development' && tweets.length > 0) {
-          tweets.forEach((tweet, index) => {
-            logger.debug(`📝 Tweet ${index + 1}:`, {
-              id: tweet.id,
-              text: tweet.text?.substring(0, 100) + '...',
-              createdAt: tweet.createdAt,
-              retweetCount: tweet.retweetCount,
-              likeCount: tweet.likeCount
-            });
-          });
-        }
-
         return {
-          tweets: tweets,
-          has_next_page: result.has_next_page,
-          next_cursor: result.next_cursor,
+          tweets: filteredTweets,
           status: 'success',
-          fromCache: false
+          method: 'advanced_search'
         };
       } else {
-        throw new Error(result.error.message || 'Failed to get tweets');
+        logger.error('❌ Advanced Search API failed:', {
+          endpoint: '/twitter/tweet/advanced_search',
+          error: result.error,
+          query: query,
+          username: username
+        });
+        throw new Error(result.error?.message || result.error || 'Failed to get tweets via Advanced Search');
       }
     } catch (error) {
-      logger.error(`❌ Error getting tweets for ${username}:`, error.message);
+      logger.error(`❌ Error getting tweets via Advanced Search for ${username}:`, error.message);
       throw error;
+    }
+  }
+
+  // Check tweets mới cho tất cả users
+  async checkNewTweets() {
+    try {
+      const vietnamNow = this.getVietnamNow();
+      const cycleStartTime = vietnamNow.toISOString();
+      logger.info(`🚀 Starting tweet check cycle at Vietnam time ${cycleStartTime}`);
+      
+      const users = await this.getTrackedUsers();
+      logger.info(`👥 Found ${users.length} users to check`);
+
+      if (users.length === 0) {
+        logger.info('📭 No users to check');
+        return [];
+      }
+
+      let totalNewTweets = 0;
+      let allNewTweets = [];
+
+      // Process each user
+      for (let i = 0; i < users.length; i++) {
+        const user = users[i];
+        
+        logger.info(`👤 Checking user ${i + 1}/${users.length}: ${user.username}`);
+
+        try {
+          // Calculate since timestamp from lastCheckTime hoặc lastTweetId
+          let sinceTimestamp = null;
+          
+          // Ưu tiên sử dụng lastCheckTime để tránh miss tweets
+          if (user.lastCheckTime) {
+            sinceTimestamp = new Date(user.lastCheckTime.getTime() - 60 * 1000); // Trừ 1 phút để tránh miss
+            logger.info(`📌 Using lastCheckTime (Vietnam): ${sinceTimestamp.toISOString()}`);
+          }
+          else if (user.lastTweetId) {
+            // Fallback: Get timestamp of last tweet we processed
+            const lastTweet = await Tweet.findOne({ 
+              tweetId: user.lastTweetId 
+            }).sort({ createdAt: -1 });
+            
+            if (lastTweet) {
+              sinceTimestamp = new Date(lastTweet.createdAt.getTime() + 1000); // Add 1 second to avoid duplicates
+              logger.info(`📌 Using lastTweetId timestamp (Vietnam): ${sinceTimestamp.toISOString()}`);
+            }
+          }
+          
+          if (!sinceTimestamp) {
+            // No lastCheckTime or lastTweetId, chỉ lấy 30 phút gần nhất
+            const vietnamNow = this.getVietnamNow();
+            sinceTimestamp = new Date(vietnamNow.getTime() - 30 * 60 * 1000); // 30 phút
+            logger.info(`📅 Using 30min fallback Vietnam timestamp: ${sinceTimestamp.toISOString()}`);
+          }
+
+          // Update lastCheckTime trước khi check
+          user.lastCheckTime = this.getVietnamNow();
+          await user.save();
+
+          // Use Advanced Search
+          const tweetsData = await this.getUserTweetsSince(user.username, sinceTimestamp);
+          
+          logger.info(`📨 Found ${tweetsData.tweets?.length || 0} new tweets for ${user.username}`);
+
+          if (tweetsData.tweets && tweetsData.tweets.length > 0) {
+            // Sort tweets by creation time (oldest first for processing)
+            const sortedTweets = tweetsData.tweets.sort((a, b) => 
+              new Date(a.createdAt) - new Date(b.createdAt)
+            );
+
+            // Process each tweet
+            for (const tweet of sortedTweets) {
+              // Check if we already have this tweet
+              const existingTweet = await Tweet.findOne({ tweetId: tweet.id });
+              
+              if (existingTweet) {
+                logger.info(`⏭️ Tweet ${tweet.id} already exists, skipping`);
+                continue;
+              }
+
+              // Save new tweet
+              const newTweet = new Tweet({
+                tweetId: tweet.id,
+                userId: user.userId,
+                username: user.username,
+                displayName: user.displayName,
+                text: tweet.text,
+                createdAt: new Date(tweet.createdAt),
+                media: tweet.media || [],
+                retweetCount: tweet.retweetCount || 0,
+                likeCount: tweet.likeCount || 0,
+                replyCount: tweet.replyCount || 0,
+                quoteCount: tweet.quoteCount || 0,
+                viewCount: tweet.viewCount || 0,
+                bookmarkCount: tweet.bookmarkCount || 0,
+                isReply: tweet.isReply || false,
+                lang: tweet.lang,
+                source: tweet.source,
+                isPostedToTelegram: false
+              });
+
+              await newTweet.save();
+              logger.info(`💾 Saved new tweet ${tweet.id} for ${user.username}`);
+
+              allNewTweets.push(newTweet);
+              totalNewTweets++;
+            }
+
+            // Update user's lastTweetId to latest tweet
+            if (sortedTweets.length > 0) {
+              const latestTweet = sortedTweets[sortedTweets.length - 1];
+              user.lastTweetId = latestTweet.id;
+              await user.save();
+              logger.info(`📌 Updated lastTweetId for ${user.username}: ${latestTweet.id}`);
+            }
+          } else {
+            logger.info(`📭 No new tweets for ${user.username}`);
+          }
+
+          // Small delay between users
+          if (i < users.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+
+        } catch (error) {
+          logger.error(`❌ Error checking ${user.username}:`, error.message);
+        }
+      }
+
+      logger.info(`🏁 Check cycle completed:`, {
+        cycleEndTime: this.getVietnamNow().toISOString(),
+        usersChecked: users.length,
+        newTweetsFound: totalNewTweets
+      });
+
+      if (totalNewTweets > 0) {
+        logger.info(`🎉 Found ${totalNewTweets} new tweets across ${users.length} users`);
+        return allNewTweets;
+      } else {
+        logger.info('📭 No new tweets found');
+        return [];
+      }
+
+    } catch (error) {
+      logger.error('❌ Error in checkNewTweets:', {
+        message: error.message,
+        stack: error.stack
+      });
+      return [];
     }
   }
 
@@ -383,10 +390,10 @@ class TwitterService {
         return { success: false, message: 'User đã được theo dõi rồi!' };
       }
 
-      // Lấy thông tin user từ Twitter (hoặc mock)
+      // Lấy thông tin user từ Twitter
       const twitterUser = await this.getUserByUsername(username);
       
-      // Lưu vào database với đầy đủ thông tin
+      // Lưu vào database
       const newUser = new TwitterUser({
         username: username.toLowerCase(),
         userId: twitterUser.id,
@@ -408,20 +415,12 @@ class TwitterService {
       await newUser.save();
       logger.info(`Đã thêm user ${username} vào danh sách theo dõi`);
       
-      const mockWarning = this.isMockMode ? ' (Mock Mode)' : '';
       return { 
         success: true, 
-        message: `Đã thêm ${twitterUser.name} (@${username}) vào danh sách theo dõi!${mockWarning}` 
+        message: `Đã thêm ${twitterUser.name} (@${username}) vào danh sách theo dõi!` 
       };
     } catch (error) {
-      // Cải thiện error logging để debug tốt hơn
-      const errorDetails = {
-        message: error.message,
-        stack: error.stack,
-        response: error.response?.data,
-        status: error.response?.status
-      };
-      logger.error(`Lỗi thêm user ${username}:`, errorDetails);
+      logger.error(`Lỗi thêm user ${username}:`, error.message);
       return { success: false, message: `Không thể thêm user ${username}. Vui lòng kiểm tra username!` };
     }
   }
@@ -450,313 +449,6 @@ class TwitterService {
     } catch (error) {
       logger.error('Lỗi lấy danh sách user:', error.message);
       return [];
-    }
-  }
-
-  // PRACTICAL OPTIMIZATION: Smart check tweets với intelligent scheduling
-  async checkNewTweets() {
-    try {
-      const users = await this.getTrackedUsers();
-      let newTweets = [];
-
-      logger.info(`🔍 Checking ${users.length} users for new tweets (with smart optimization)`);
-
-      // PRACTICAL OPTIMIZATION: Filter users cần check
-      const usersToCheck = users.filter(user => this.shouldCheckUser(user.username));
-      const skippedCount = users.length - usersToCheck.length;
-      
-      if (skippedCount > 0) {
-        logger.info(`⏰ Smart scheduling: checking ${usersToCheck.length}/${users.length} users (saved ${skippedCount} API calls)`);
-      }
-
-      if (usersToCheck.length === 0) {
-        logger.info(`📭 No users need checking right now`);
-        return [];
-      }
-
-      // PRACTICAL OPTIMIZATION: Add delay giữa requests để tránh overwhelm
-      for (const [index, user] of usersToCheck.entries()) {
-        try {
-          logger.info(`👤 Checking user ${index + 1}/${usersToCheck.length}: ${user.username} (lastTweetId: ${user.lastTweetId})`);
-          
-          const tweetsData = await this.getUserTweets(user.username);
-          
-          // PRACTICAL OPTIMIZATION: Update activity tracking
-          this.updateUserActivity(user.username, tweetsData.tweets || []);
-          
-          // TwitterAPI.io last_tweets endpoint trả về { tweets: [...] }
-          if (tweetsData.tweets && tweetsData.tweets.length > 0) {
-            logger.info(`📨 Found ${tweetsData.tweets.length} tweets for ${user.username} (cache: ${tweetsData.fromCache || false})`);
-            
-            // Sắp xếp tweets theo thời gian giảm dần (mới nhất trước)
-            const sortedTweets = tweetsData.tweets.sort((a, b) => 
-              new Date(b.createdAt) - new Date(a.createdAt)
-            );
-
-            let hasNewTweets = false;
-            
-            // DEBUG: Log thông tin lastTweetId hiện tại
-            logger.info(`🔍 Debug for ${user.username}:`, {
-              lastTweetId: user.lastTweetId,
-              totalTweetsFromAPI: sortedTweets.length,
-              latestTweetFromAPI: sortedTweets[0]?.id,
-              latestTweetCreatedAt: sortedTweets[0]?.createdAt
-            });
-            
-            for (const tweet of sortedTweets) {
-              // DEBUG: Log từng tweet đang xử lý
-              logger.info(`🔎 Processing tweet:`, {
-                tweetId: tweet.id,
-                createdAt: tweet.createdAt,
-                text: tweet.text?.substring(0, 50) + '...',
-                isLastSeenTweet: tweet.id === user.lastTweetId
-              });
-
-              // Nếu có lastTweetId, chỉ lấy tweets mới hơn
-              if (user.lastTweetId && tweet.id === user.lastTweetId) {
-                logger.info(`⏹️ Reached last seen tweet ID for ${user.username}: ${tweet.id}`);
-                break;
-              }
-
-              // Kiểm tra tweet đã tồn tại trong database chưa
-              const existingTweet = await Tweet.findOne({ tweetId: tweet.id });
-              if (!existingTweet) {
-                logger.info(`✨ New tweet found from ${user.username}: ${tweet.id}`);
-                
-                // Xử lý media nếu có (hình ảnh, video, v.v.)
-                let media = [];
-                
-                // Xử lý hình ảnh/video từ extendedEntities.media
-                if (tweet.extendedEntities?.media && tweet.extendedEntities.media.length > 0) {
-                  media = tweet.extendedEntities.media.map(mediaItem => ({
-                    type: mediaItem.type || 'photo', // photo, video, animated_gif
-                    url: mediaItem.media_url_https || mediaItem.media_url,
-                    expanded_url: mediaItem.expanded_url,
-                    display_url: mediaItem.display_url,
-                    width: mediaItem.original_info?.width,
-                    height: mediaItem.original_info?.height
-                  }));
-                }
-                
-                // Xử lý URLs khác nếu không có media
-                if (media.length === 0 && tweet.entities?.urls && tweet.entities.urls.length > 0) {
-                  media = tweet.entities.urls.map(url => ({
-                    type: 'url',
-                    url: url.expanded_url || url.url,
-                    display_url: url.display_url
-                  }));
-                }
-
-                const newTweet = new Tweet({
-                  tweetId: tweet.id,
-                  userId: user.userId,
-                  username: user.username,
-                  displayName: user.displayName,
-                  text: tweet.text,
-                  createdAt: new Date(tweet.createdAt),
-                  media: media,
-                  retweetCount: tweet.retweetCount || 0,
-                  likeCount: tweet.likeCount || 0,
-                  replyCount: tweet.replyCount || 0,
-                  quoteCount: tweet.quoteCount || 0,
-                  viewCount: tweet.viewCount || 0,
-                  bookmarkCount: tweet.bookmarkCount || 0,
-                  isReply: tweet.isReply || false,
-                  lang: tweet.lang,
-                  source: tweet.source
-                });
-
-                await newTweet.save();
-                newTweets.push(newTweet);
-                hasNewTweets = true;
-                
-                logger.info(`💾 Saved new tweet: ${tweet.id} from ${user.username}`);
-              } else {
-                logger.info(`⚠️ Tweet already exists in database: ${tweet.id}`);
-              }
-            }
-
-            // Cập nhật lastTweetId với tweet mới nhất
-            if (sortedTweets.length > 0) {
-              const latestTweetId = sortedTweets[0].id;
-              if (user.lastTweetId !== latestTweetId) {
-                user.lastTweetId = latestTweetId;
-                await user.save();
-                logger.info(`🔄 Updated lastTweetId for ${user.username}: ${latestTweetId}`);
-              }
-            }
-
-            if (!hasNewTweets) {
-              logger.info(`📭 No new tweets for ${user.username}`);
-            }
-          } else {
-            logger.info(`📪 No tweets found for ${user.username}`);
-          }
-
-          // PRACTICAL OPTIMIZATION: Add small delay between users
-          if (index < usersToCheck.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, 1000)); // 1 second delay
-          }
-
-        } catch (error) {
-          logger.error(`Lỗi check tweets cho user ${user.username}:`, {
-            message: error.message,
-            stack: error.stack
-          });
-        }
-      }
-
-      // Log optimization stats
-      const stats = this.getUsageStats();
-      logger.info(`💰 Optimization summary:`, {
-        usersChecked: usersToCheck.length,
-        usersSkipped: skippedCount,
-        apiCallsSaved: this.usageStats.savedByOptimization,
-        estimatedSavings: stats.savedCost,
-        newTweetsFound: newTweets.length
-      });
-
-      if (newTweets.length > 0) {
-        logger.info(`🎉 Found ${newTweets.length} new tweets total!`);
-      } else {
-        logger.info(`📭 No new tweets found across all users`);
-      }
-
-      return newTweets;
-    } catch (error) {
-      logger.error('Lỗi check new tweets:', error.message);
-      return [];
-    }
-  }
-
-  // NEW: Advanced search tweets - Based on TwitterAPI.io docs
-  async searchTweets(query, options = {}) {
-    try {
-      if (this.isMockMode) {
-        logger.info(`🧪 Mock mode: No search results for query "${query}"`);
-        return { tweets: [] };
-      }
-
-      const params = {
-        query: query,
-        ...options // date_since, date_until, lang, etc.
-      };
-
-      logger.info(`🔍 Searching tweets with query: "${query}"`, { params });
-
-      const result = await this.makeAPIRequest('/twitter/search/advanced', params);
-
-      if (result.success) {
-        const tweets = result.data?.tweets || [];
-        logger.info(`📊 Search results: ${tweets.length} tweets found`);
-        
-        return {
-          tweets: tweets,
-          has_next_page: result.has_next_page,
-          next_cursor: result.next_cursor,
-          status: 'success'
-        };
-      } else {
-        throw new Error(result.error.message || 'Search failed');
-      }
-    } catch (error) {
-      logger.error(`❌ Error searching tweets with query "${query}":`, error.message);
-      throw error;
-    }
-  }
-
-  // NEW: Get user followers - Based on TwitterAPI.io docs
-  async getUserFollowers(username, cursor = null) {
-    try {
-      if (this.isMockMode) {
-        logger.info(`🧪 Mock mode: No followers for user ${username}`);
-        return { users: [] };
-      }
-
-      const params = { userName: username };
-      if (cursor) params.cursor = cursor;
-
-      logger.info(`👥 Getting followers for user ${username}`);
-
-      const result = await this.makeAPIRequest('/twitter/user/followers', params);
-
-      if (result.success) {
-        const users = result.data?.users || [];
-        logger.info(`📊 Found ${users.length} followers for ${username}`);
-        
-        return {
-          users: users,
-          has_next_page: result.has_next_page,
-          next_cursor: result.next_cursor,
-          status: 'success'
-        };
-      } else {
-        throw new Error(result.error.message || 'Failed to get followers');
-      }
-    } catch (error) {
-      logger.error(`❌ Error getting followers for ${username}:`, error.message);
-      throw error;
-    }
-  }
-
-  // NEW: Get multiple tweets by IDs - Based on TwitterAPI.io docs
-  async getTweetsByIds(tweetIds) {
-    try {
-      if (this.isMockMode) {
-        logger.info(`🧪 Mock mode: No tweets for IDs ${tweetIds.join(', ')}`);
-        return { tweets: [] };
-      }
-
-      const params = {
-        ids: Array.isArray(tweetIds) ? tweetIds.join(',') : tweetIds
-      };
-
-      logger.info(`🔍 Getting tweets by IDs: ${params.ids}`);
-
-      const result = await this.makeAPIRequest('/twitter/tweets', params);
-
-      if (result.success) {
-        const tweets = result.data?.tweets || [];
-        logger.info(`📊 Found ${tweets.length} tweets by IDs`);
-        
-        return {
-          tweets: tweets,
-          status: 'success'
-        };
-      } else {
-        throw new Error(result.error.message || 'Failed to get tweets by IDs');
-      }
-    } catch (error) {
-      logger.error(`❌ Error getting tweets by IDs:`, error.message);
-      throw error;
-    }
-  }
-
-  // Enhanced debug method with new API wrapper
-  async debugGetTweets(username) {
-    try {
-      logger.info(`🔧 DEBUG: Testing API directly for ${username}`);
-      
-      if (this.isMockMode) {
-        logger.warn('🧪 Cannot debug in mock mode!');
-        return { error: 'Mock mode enabled' };
-      }
-
-      const result = await this.makeAPIRequest('/twitter/user/last_tweets', {
-        userName: username
-      });
-
-      logger.info(`🔧 DEBUG API Response:`, {
-        success: result.success,
-        tweetsCount: result.success ? result.data?.tweets?.length || 0 : 0,
-        hasNextPage: result.has_next_page,
-        error: result.error
-      });
-
-      return result.success ? result.data : { error: result.error };
-    } catch (error) {
-      logger.error(`🔧 DEBUG API Error:`, error.message);
-      return { error: error.message };
     }
   }
 
@@ -800,25 +492,116 @@ class TwitterService {
     }
   }
 
-  // DEBUG: Phương thức reset lastTweetId để test lại
-  async resetLastTweetId(username) {
+  // Advanced search tweets
+  async searchTweets(query, options = {}) {
     try {
-      const user = await TwitterUser.findOne({ username: username.toLowerCase() });
-      if (user) {
-        const oldLastTweetId = user.lastTweetId;
-        user.lastTweetId = null;
-        await user.save();
-        logger.info(`🔄 Reset lastTweetId for ${username}: ${oldLastTweetId} -> null`);
-        return { success: true, message: `Reset lastTweetId for ${username}` };
+      const params = {
+        query: query,
+        ...options
+      };
+
+      logger.info(`🔍 Searching tweets with query: "${query}"`, { params });
+
+      const result = await this.makeAPIRequest('/twitter/tweet/advanced_search', params);
+
+      if (result.success) {
+        const tweets = result.data?.tweets || [];
+        logger.info(`📊 Search results: ${tweets.length} tweets found`);
+        
+        return {
+          tweets: tweets,
+          has_next_page: result.has_next_page,
+          next_cursor: result.next_cursor,
+          status: 'success'
+        };
       } else {
-        return { success: false, message: `User ${username} not found` };
+        throw new Error(result.error.message || 'Search failed');
       }
     } catch (error) {
-      logger.error(`Error resetting lastTweetId for ${username}:`, error.message);
-      return { success: false, message: error.message };
+      logger.error(`❌ Error searching tweets with query "${query}":`, error.message);
+      throw error;
     }
   }
 
+  // Get user followers
+  async getUserFollowers(username, cursor = null) {
+    try {
+      const params = { userName: username };
+      if (cursor) params.cursor = cursor;
+
+      logger.info(`👥 Getting followers for user ${username}`);
+
+      const result = await this.makeAPIRequest('/twitter/user/followers', params);
+
+      if (result.success) {
+        const users = result.data?.users || [];
+        logger.info(`📊 Found ${users.length} followers for ${username}`);
+        
+        return {
+          users: users,
+          has_next_page: result.has_next_page,
+          next_cursor: result.next_cursor,
+          status: 'success'
+        };
+      } else {
+        throw new Error(result.error.message || 'Failed to get followers');
+      }
+    } catch (error) {
+      logger.error(`❌ Error getting followers for ${username}:`, error.message);
+      throw error;
+    }
+  }
+
+  // Get tweets by IDs
+  async getTweetsByIds(tweetIds) {
+    try {
+      const params = {
+        ids: Array.isArray(tweetIds) ? tweetIds.join(',') : tweetIds
+      };
+
+      logger.info(`🔍 Getting tweets by IDs: ${params.ids}`);
+
+      const result = await this.makeAPIRequest('/twitter/tweets', params);
+
+      if (result.success) {
+        const tweets = result.data?.tweets || [];
+        logger.info(`📊 Found ${tweets.length} tweets by IDs`);
+        
+        return {
+          tweets: tweets,
+          status: 'success'
+        };
+      } else {
+        throw new Error(result.error.message || 'Failed to get tweets by IDs');
+      }
+    } catch (error) {
+      logger.error(`❌ Error getting tweets by IDs:`, error.message);
+      throw error;
+    }
+  }
+
+  // Debug method
+  async debugGetTweets(username) {
+    try {
+      logger.info(`🔧 DEBUG: Testing API directly for ${username}`);
+      
+      const result = await this.makeAPIRequest('/twitter/user/last_tweets', {
+        userName: username
+      });
+
+      logger.info(`🔧 DEBUG API Response:`, {
+        success: result.success,
+        tweetsCount: result.success ? result.data?.tweets?.length || 0 : 0,
+        hasNextPage: result.has_next_page,
+        error: result.error
+      });
+
+      return result.success ? result.data : { error: result.error };
+    } catch (error) {
+      logger.error(`🔧 DEBUG API Error:`, error.message);
+      return { error: error.message };
+    }
+  }
 }
 
-module.exports = new TwitterService(); 
+module.exports = new TwitterService();

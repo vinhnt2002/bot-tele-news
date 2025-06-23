@@ -14,19 +14,26 @@
     "pm2:logs": "pm2 logs twitter-bot",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": ["telegram", "twitter", "bot", "nodejs", "mongodb"],
+  "keywords": [
+    "telegram",
+    "twitter",
+    "bot",
+    "nodejs",
+    "mongodb"
+  ],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "node-telegram-bot-api": "^0.61.0",
-    "mongoose": "^7.6.3",
     "axios": "^1.5.1",
     "dotenv": "^16.3.1",
-    "node-cron": "^3.0.2",
+    "https-proxy-agent": "^7.0.6",
     "moment": "^2.29.4",
+    "mongoose": "^7.6.3",
+    "node-cron": "^3.0.2",
+    "node-telegram-bot-api": "^0.61.0",
     "winston": "^3.10.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
   }
-} 
+}
